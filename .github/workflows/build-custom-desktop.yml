@@ -43,7 +43,12 @@ jobs:
 
       - name: Build Windows Desktop Installer
         shell: pwsh
-        run: pnpm run build:win
+        run: |
+          pnpm run build:desktop
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pnpm run ensure:electron-runtime
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish never
 
       - name: Upload Windows Installer Artifact
         uses: actions/upload-artifact@v4
@@ -74,15 +79,23 @@ jobs:
       - name: Enable Corepack (pnpm 12)
         run: corepack enable
 
-      - name: Install root dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Install root dependencies (arm64 + x64 native variants)
+        run: pnpm run install:release
 
       - name: Install mobile dependencies (for mobile-web bundle)
         working-directory: mobile
         run: pnpm install --frozen-lockfile
 
       - name: Build macOS Desktop Installer
-        run: pnpm run build:mac
+        run: |
+          pnpm run build:desktop
+          pnpm run build:computer-macos
+          pnpm run build:keyboard-layout-macos
+          pnpm run build:process-footprint-macos
+          pnpm run build:socket-owner-macos
+          pnpm run build:notification-status-macos
+          pnpm run ensure:electron-runtime
+          pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish never
 
       - name: Upload macOS Installer Artifact
         uses: actions/upload-artifact@v4
