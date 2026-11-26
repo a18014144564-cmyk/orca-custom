@@ -1,0 +1,319 @@
+import { undeliveredInboxQuery, type UndeliveredInboxOptions } from './undelivered-inbox-query'
+import { noteQuestionEdge } from './question-edges'
+import type { MessageType, MessageRow } from '../orchestration-records'
+import { exposeMessageTimestamps, exposeMessageListTimestamps } from '../utc-timestamp'
+import { addLifecycleRejectionMarker } from '../lifecycle-rejection-marker'
+import type { OrchestrationDb } from '../orchestration-db'
+import { MESSAGE_COLUMN_LIST } from '../row-column-lists'
+import { runOwnsDirectMessageSql } from '../runs/run-coordinator-mail-routing'
+import { stampQuestionTakes, type MailTaker } from './mail-taker'
+import { MESSAGE_ID_UPDATE_BATCH_SIZE, unreadMailboxesOf } from './message-read-mailboxes'
+
+const MESSAGE_MUTATION_SAVEPOINT = 'message_id_mutation'
+
+function runBatchedMessageMutation(
+  db: OrchestrationDb,
+  ids: string[],
+  sqlForPlaceholders: (placeholders: string) => string,
+  leadingBindings: string[] = [],
+  beforeBatch: (batch: string[]) => void = () => {},
+  consuming = false
+): void {
+  if (ids.length === 0) {
+    return
+  }
+  const readMailboxes =
+    consuming && db.mailReadListener && db.mailReadWanted() ? unreadMailboxesOf(db, ids) : []
+  db.db.exec(`SAVEPOINT ${MESSAGE_MUTATION_SAVEPOINT}`)
+  try {
+    for (let offset = 0; offset < ids.length; offset += MESSAGE_ID_UPDATE_BATCH_SIZE) {
+      const batch = ids.slice(offset, offset + MESSAGE_ID_UPDATE_BATCH_SIZE)
+      const placeholders = batch.map(() => '?').join(',')
+      beforeBatch(batch)
+      db.db.prepare(sqlForPlaceholders(placeholders)).run(...leadingBindings, ...batch)
+    }
+    db.db.exec(`RELEASE ${MESSAGE_MUTATION_SAVEPOINT}`)
+  } catch (error) {
+    db.db.exec(`ROLLBACK TO ${MESSAGE_MUTATION_SAVEPOINT}`)
+    db.db.exec(`RELEASE ${MESSAGE_MUTATION_SAVEPOINT}`)
+    throw error
+  }
+  if (readMailboxes.length > 0) {
+    try {
+      db.mailReadListener?.(readMailboxes)
+    } catch {
+      // A listener fault cannot undo a committed read.
+    }
+  }
+}
+
+export function getUnreadMessages(
+  this: OrchestrationDb,
+  toHandle: string,
+  types?: MessageType[],
+  options?: { excludeRunOwnedDirect?: boolean }
+): MessageRow[] {
+  const typeSql = types?.length ? ` AND type IN (${types.map(() => '?').join(',')})` : ''
+  const runOwnedSql = options?.excludeRunOwnedDirect
+    ? ` AND NOT ${runOwnsDirectMessageSql('messages')}`
+    : ''
+  return exposeMessageListTimestamps(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over messages returns the row shape its schema and MessageRow define, like every row cast in db/.
+    this.db
+      .prepare(
+        `SELECT * FROM messages
+         WHERE to_handle = ? AND read = 0 AND delivery_contract = 'current_delivery'${typeSql}${runOwnedSql}
+         ORDER BY sequence`
+      )
+      .all(toHandle, ...(types ?? [])) as MessageRow[]
+  )
+}
+
+export function convertLifecycleMessageToRejection(
+  this: OrchestrationDb,
+  messageId: string,
+  code: string,
+  reason: string
+): MessageRow | undefined {
+  const message = this.getMessageById(messageId)
+  if (
+    !message ||
+    !['worker_done', 'heartbeat', 'escalation', 'decision_gate'].includes(message.type)
+  ) {
+    return message
+  }
+
+  const originalBody = message.body ? `\n\nOriginal body:\n${message.body}` : ''
+  const body = `Orca rejected this ${message.type}: ${reason}${originalBody}`
+  const payload = addLifecycleRejectionMarker(message.payload, code, reason)
+  // Keep rejected lifecycle signals auditable but non-actionable on read paths.
+  this.db
+    .prepare(
+      `UPDATE messages
+       SET type = CASE WHEN type IN ('escalation', 'decision_gate') THEN 'status' ELSE type END,
+           priority = 'high', subject = ?, body = ?, payload = ?
+       WHERE id = ?`
+    )
+    .run(`Rejected ${message.type}: ${message.subject}`, body, payload, messageId)
+  return this.getMessageById(messageId)
+}
+
+// delivered_at prevents push replay; only explicit check sets read.
+export function getUndeliveredUnreadMessages(
+  this: OrchestrationDb,
+  toHandle: string,
+  types?: MessageType[],
+  options?: UndeliveredInboxOptions
+): MessageRow[] {
+  const query = undeliveredInboxQuery(toHandle, types, options)
+  return exposeMessageListTimestamps(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the shared predicate changes selection only; SELECT * still returns the messages schema.
+    this.db.prepare(`SELECT * ${query.sql}`).all(...query.params) as MessageRow[]
+  )
+}
+
+export function getUndeliveredUnreadSequence(
+  this: OrchestrationDb,
+  toHandle: string,
+  options: UndeliveredInboxOptions
+): number | undefined {
+  const query = undeliveredInboxQuery(toHandle, undefined, {
+    ...options,
+    newestFirst: true,
+    limit: 1
+  })
+  const row = this.db.prepare(`SELECT sequence ${query.sql}`).get(...query.params)
+  return typeof row?.sequence === 'number' ? row.sequence : undefined
+}
+
+export function getUndeliveredUnreadMailboxHandles(this: OrchestrationDb): string[] {
+  return (
+    this.db
+      .prepare(
+        `SELECT DISTINCT to_handle FROM messages
+         WHERE read = 0 AND delivered_at IS NULL
+           AND pointer_enter_pending = 0
+           AND delivery_contract = 'current_delivery'`
+      )
+      .all() as { to_handle: string }[]
+  ).map((row) => row.to_handle)
+}
+
+export function getAllMessages(this: OrchestrationDb, toHandle: string, limit = 20): MessageRow[] {
+  return exposeMessageListTimestamps(
+    this.db
+      .prepare('SELECT * FROM messages WHERE to_handle = ? ORDER BY sequence DESC LIMIT ?')
+      .all(toHandle, limit) as MessageRow[]
+  )
+}
+
+export function getMessageById(this: OrchestrationDb, id: string): MessageRow | undefined {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the column list names every column of the row type, and a missing one fails compilation.
+  const message = this.db
+    .prepare(`SELECT ${MESSAGE_COLUMN_LIST} FROM messages WHERE id = ?`)
+    .get(id) as MessageRow | undefined
+  return message ? exposeMessageTimestamps(message) : undefined
+}
+
+/** `taker` is who this read hands any agent question to, stamped in the same write. */
+export function markAsRead(this: OrchestrationDb, ids: string[], taker: MailTaker): void {
+  markRead(this, ids, taker, '')
+}
+
+export function markAsDelivered(this: OrchestrationDb, ids: string[], mailboxHandle: string): void {
+  noteQuestionEdge({ kind: 'mail', ids })
+  runBatchedMessageMutation(
+    this,
+    ids,
+    (placeholders) =>
+      `UPDATE messages
+       SET delivered_at = datetime('now'), pointer_enter_pending = 0,
+           pointer_pty_id = NULL, pointer_process_incarnation = NULL
+       WHERE to_handle = ? AND id IN (${placeholders})`,
+    [mailboxHandle]
+  )
+}
+
+export function markAsUndelivered(this: OrchestrationDb, ids: string[]): void {
+  runBatchedMessageMutation(
+    this,
+    ids,
+    (placeholders) =>
+      `UPDATE messages
+       SET delivered_at = NULL, pointer_enter_pending = 0, pointer_pty_id = NULL,
+           pointer_process_incarnation = NULL
+       WHERE read = 0 AND id IN (${placeholders})`
+  )
+}
+
+export function areUnreadMessages(this: OrchestrationDb, toHandle: string, ids: string[]): boolean {
+  let matched = 0
+  for (let offset = 0; offset < ids.length; offset += MESSAGE_ID_UPDATE_BATCH_SIZE) {
+    const batch = ids.slice(offset, offset + MESSAGE_ID_UPDATE_BATCH_SIZE)
+    const placeholders = batch.map(() => '?').join(',')
+    const row = this.db
+      .prepare(
+        `SELECT COUNT(*) AS count FROM messages INDEXED BY idx_messages_id
+         WHERE to_handle = ? AND read = 0 AND delivery_contract = 'current_delivery'
+           AND id IN (${placeholders})`
+      )
+      .get(toHandle, ...batch) as { count: number }
+    matched += row.count
+  }
+  return matched === ids.length
+}
+
+// Superseded lifecycle mail must not be consumed or injected after Dispatch settlement.
+export function markAsReadAndDelivered(this: OrchestrationDb, ids: string[], taker: MailTaker) {
+  markRead(this, ids, taker, "delivered_at = COALESCE(delivered_at, datetime('now')),")
+}
+
+function markRead(db: OrchestrationDb, ids: string[], taker: MailTaker, delivered: string): void {
+  noteQuestionEdge({ kind: 'mail', ids })
+  runBatchedMessageMutation(
+    db,
+    ids,
+    (placeholders) =>
+      `UPDATE messages
+       SET read = 1, ${delivered} pointer_enter_pending = 0, pointer_pty_id = NULL,
+           pointer_process_incarnation = NULL
+       WHERE id IN (${placeholders})`,
+    [],
+    (batch) => stampQuestionTakes(db, batch, taker),
+    true
+  )
+}
+
+export function getInbox(this: OrchestrationDb, limit = 20, runId?: string): MessageRow[] {
+  return exposeMessageListTimestamps(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over messages returns the row shape its schema and MessageRow define, like every row cast in db/.
+    (runId === undefined
+      ? this.db.prepare('SELECT * FROM messages ORDER BY sequence DESC LIMIT ?').all(limit)
+      : // Why: an `(? IS NULL OR run_id = ?)` predicate hides idx_messages_run_sequence and scans the table.
+        this.db
+          .prepare('SELECT * FROM messages WHERE run_id = ? ORDER BY sequence DESC LIMIT ?')
+          .all(runId, limit)) as MessageRow[]
+  )
+}
+
+// History reads include all messages without marking them read.
+export function getAllMessagesForHandle(
+  this: OrchestrationDb,
+  toHandle: string,
+  limit = 100,
+  types?: MessageType[],
+  runId?: string
+): MessageRow[] {
+  const typed = types && types.length > 0
+  const typeFilter = typed ? `AND type IN (${types.map(() => '?').join(',')})` : ''
+  return exposeMessageListTimestamps(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over messages returns the row shape its schema and MessageRow define, like every row cast in db/.
+    this.db
+      .prepare(
+        `SELECT * FROM messages WHERE to_handle = ? AND (? IS NULL OR run_id = ?) ${typeFilter}
+         ORDER BY sequence DESC LIMIT ?`
+      )
+      .all(toHandle, runId ?? null, runId ?? null, ...(typed ? types : []), limit) as MessageRow[]
+  )
+}
+
+// Resume after the outbound ask and return only replies addressed to this worker.
+export function getThreadMessagesFor(
+  this: OrchestrationDb,
+  threadId: string,
+  toHandle: string,
+  afterSequence?: number
+): MessageRow[] {
+  if (afterSequence !== undefined) {
+    return exposeMessageListTimestamps(
+      this.db
+        .prepare(
+          'SELECT * FROM messages WHERE thread_id = ? AND to_handle = ? AND sequence > ? ORDER BY sequence ASC'
+        )
+        .all(threadId, toHandle, afterSequence) as MessageRow[]
+    )
+  }
+  return exposeMessageListTimestamps(
+    this.db
+      .prepare('SELECT * FROM messages WHERE thread_id = ? AND to_handle = ? ORDER BY sequence ASC')
+      .all(threadId, toHandle) as MessageRow[]
+  )
+}
+
+export type MessageInboxMethods = {
+  getUnreadMessages: typeof getUnreadMessages
+  convertLifecycleMessageToRejection: typeof convertLifecycleMessageToRejection
+  getUndeliveredUnreadSequence: typeof getUndeliveredUnreadSequence
+  getUndeliveredUnreadMessages: typeof getUndeliveredUnreadMessages
+  getUndeliveredUnreadMailboxHandles: typeof getUndeliveredUnreadMailboxHandles
+  getAllMessages: typeof getAllMessages
+  getMessageById: typeof getMessageById
+  markAsRead: typeof markAsRead
+  markAsDelivered: typeof markAsDelivered
+  markAsUndelivered: typeof markAsUndelivered
+  areUnreadMessages: typeof areUnreadMessages
+  markAsReadAndDelivered: typeof markAsReadAndDelivered
+  getInbox: typeof getInbox
+  getAllMessagesForHandle: typeof getAllMessagesForHandle
+  getThreadMessagesFor: typeof getThreadMessagesFor
+}
+
+export function attachMessageInbox(ctor: { prototype: object }): void {
+  Object.assign(ctor.prototype, {
+    getUnreadMessages,
+    convertLifecycleMessageToRejection,
+    getUndeliveredUnreadSequence,
+    getUndeliveredUnreadMessages,
+    getUndeliveredUnreadMailboxHandles,
+    getAllMessages,
+    getMessageById,
+    markAsRead,
+    markAsDelivered,
+    markAsUndelivered,
+    areUnreadMessages,
+    markAsReadAndDelivered,
+    getInbox,
+    getAllMessagesForHandle,
+    getThreadMessagesFor
+  })
+}
