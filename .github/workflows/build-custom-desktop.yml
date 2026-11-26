@@ -32,7 +32,12 @@ jobs:
       - name: Enable Corepack (pnpm 12)
         run: corepack enable
 
-      - name: Install dependencies (with native rebuild)
+      - name: Install root dependencies (with native rebuild)
+        shell: pwsh
+        run: pnpm install --frozen-lockfile
+
+      - name: Install mobile dependencies (for mobile-web bundle)
+        working-directory: mobile
         shell: pwsh
         run: pnpm install --frozen-lockfile
 
@@ -69,7 +74,11 @@ jobs:
       - name: Enable Corepack (pnpm 12)
         run: corepack enable
 
-      - name: Install dependencies
+      - name: Install root dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install mobile dependencies (for mobile-web bundle)
+        working-directory: mobile
         run: pnpm install --frozen-lockfile
 
       - name: Build macOS Desktop Installer
