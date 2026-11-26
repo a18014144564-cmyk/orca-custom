@@ -28,9 +28,10 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.stably.orca.mobile",
+      "bundleIdentifier": "com.stably.orca.mobile.reset",
       "buildNumber": "1",
       "infoPlist": {
+        "CFBundleDisplayName": "orca 重置版",
         "CFBundleAllowMixedLocalizations": true,
         "NSLocalNetworkUsageDescription": "Orca connects to the desktop app on your LAN.",
         "NSMicrophoneUsageDescription": "Allow Orca to use your microphone for voice dictation, transcribed on this phone or on your paired computer.",
@@ -94,7 +95,7 @@
         "android.permission.USE_BIOMETRIC",
         "android.permission.USE_FINGERPRINT"
       ],
-      "package": "dev.orca.app",
+      "package": "dev.orca.app.reset",
       "versionCode": 35,
       "googleServicesFile": "./google-services.json"
     },

@@ -53,7 +53,7 @@ jobs:
       - name: Upload Windows Installer Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Orca-Custom-Windows
+          name: Orca-Reset-Windows
           path: |
             dist/*.exe
             dist/*.blockmap
@@ -101,7 +101,7 @@ jobs:
       - name: Upload macOS Installer Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Orca-Custom-macOS
+          name: Orca-Reset-macOS
           path: |
             dist/*.dmg
             dist/*.zip

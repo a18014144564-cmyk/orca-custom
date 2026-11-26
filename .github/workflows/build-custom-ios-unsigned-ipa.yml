@@ -6,7 +6,7 @@ on:
       bundle_id:
         description: 'Optional iOS Bundle Identifier for self-signing'
         required: false
-        default: 'com.stably.orca.mobile'
+        default: 'com.stably.orca.mobile.reset'
 
 jobs:
   build-unsigned-ipa:
@@ -73,11 +73,11 @@ jobs:
         run: |
           mkdir -p Payload
           cp -R build/Build/Products/Release-iphoneos/Orca.app Payload/
-          zip -r -y ../Orca-Custom-unsigned.ipa Payload
+          zip -r -y ../orca-reset-unsigned.ipa Payload
 
       - name: Upload Unsigned IPA Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Orca-Custom-unsigned-ipa
-          path: mobile/Orca-Custom-unsigned.ipa
+          name: Orca-Reset-unsigned-ipa
+          path: mobile/orca-reset-unsigned.ipa
           retention-days: 14

@@ -1,5 +1,6 @@
 {
   "ios": {
+    "CFBundleDisplayName": "orca 重置版",
     "NSCameraUsageDescription": "允许 Orca 使用相机扫描二维码。",
     "NSLocalNetworkUsageDescription": "Orca 会连接到局域网内的桌面应用。",
     "NSMicrophoneUsageDescription": "允许 Orca 使用麦克风进行语音听写，在此手机或已配对的电脑上转写。",
