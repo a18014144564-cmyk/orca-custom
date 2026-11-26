@@ -1,6 +1,6 @@
 {
   "ios": {
-    "CFBundleDisplayName": "orca 重置版",
+    "CFBundleDisplayName": "Orca Reset",
     "NSCameraUsageDescription": "Allow Orca to use the camera for QR code scanning.",
     "NSLocalNetworkUsageDescription": "Orca connects to the desktop app on your LAN.",
     "NSMicrophoneUsageDescription": "Allow Orca to use your microphone for voice dictation, transcribed on this phone or on your paired computer.",
