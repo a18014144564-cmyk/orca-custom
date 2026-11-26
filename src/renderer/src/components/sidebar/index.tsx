@@ -41,6 +41,7 @@ import { useBotsEnabled } from '@/lib/bot-catalog'
 import { StartupWorktreeRefreshStatus } from './worktree-list/listing/StartupWorktreeRefreshStatus'
 import { WorktreeCardsIntroNotice } from './workspace-card/template/WorktreeCardsIntroNotice'
 import {
+  selectAppRailVisible,
   selectRailPageHidesWorkspaceList,
   selectWorkspaceListOpen,
   WORKSPACE_LIST_REGION_ID
@@ -48,6 +49,8 @@ import {
 import { useRailPageListFocusRelease } from '@/components/app-rail/rail-page-list-focus-loss'
 import { setWorkspaceListRegionPresent } from '@/components/app-rail/workspace-list-region-presence'
 import { WorktreeCardsUpdateNotice } from './workspace-card/template/WorktreeCardsUpdateNotice'
+import { useSidebarFourZone } from './four-zone/sidebar-four-zone'
+import { SidebarZoneSwitcher } from './four-zone/SidebarZoneSwitcher'
 
 // Load the shared Activity badge/list pipeline after the sidebar shell.
 const SidebarAgentsList = lazyWithRetry(() => import('../activity/sidebar/SidebarAgentsList'))
@@ -217,7 +220,11 @@ function Sidebar({
     useSensor(MouseSensor, { activationConstraint: { distance: 4 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 6 } })
   )
-  const botsShown = sidebarBody !== 'agents' && botsEnabled
+  const appRailVisible = useAppStore(selectAppRailVisible)
+  const { zoneMode, setZoneMode, classifiedHosts, hostIdsOverride, teamCount, botCount } =
+    useSidebarFourZone(botsEnabled)
+  const classicMode = zoneMode === 'all' || sidebarBody === 'agents'
+  const botsShown = classicMode && sidebarBody !== 'agents' && botsEnabled
   // Projects folds only when Bots is shown, so turning bots off always brings the list back.
   const projectsCollapsed = useAppStore(
     (s) => botsShown && s.collapsedGroups.has(PROJECTS_SECTION_GROUP_KEY)
@@ -231,6 +238,16 @@ function Sidebar({
     [containerRef, dropOwnerRef, sidebarOpen]
   )
 
+  const zoneTitleOverride =
+    zoneMode === 'win' ? 'Windows 主机' : zoneMode === 'mac' ? 'Mac 主机' : undefined
+  const zoneEmptyMessage =
+    zoneMode === 'win'
+      ? '暂无 Windows 主机工作区'
+      : zoneMode === 'mac'
+        ? '暂无 Mac 主机工作区（可在设置中配对 Mac 主机）'
+        : undefined
+  const showProjectsZone = classicMode || zoneMode === 'win' || zoneMode === 'mac'
+
   const botsSection = botsShown ? (
     <SidebarBotsSplit
       key="bots"
@@ -239,8 +256,16 @@ function Sidebar({
     >
       <SidebarBotsSection onOpenBot={closeWorkspaceBoard} reorderable />
     </SidebarBotsSplit>
+  ) : !classicMode && (zoneMode === 'teams' || zoneMode === 'bots') ? (
+    <SidebarBotsSection
+      key={`zone-${zoneMode}`}
+      onOpenBot={closeWorkspaceBoard}
+      entryFilter={zoneMode === 'teams' ? 'groups' : 'bots'}
+      standalone
+      titleOverride={zoneMode === 'teams' ? 'Bot 团队' : '单独 Bot'}
+    />
   ) : null
-  const projectsSection = (
+  const projectsSection = showProjectsZone ? (
     <React.Fragment key="projects">
       <SidebarHeader
         activityBadgeTarget={setAgentBadgeTarget}
@@ -248,6 +273,7 @@ function Sidebar({
         activityOptionsTarget={setAgentOptionsTarget}
         collapsible={botsShown}
         projectsCollapseTarget={setProjectsCollapseTarget}
+        titleOverride={zoneTitleOverride}
       />
       <SeveredTerminalDaemonBanner />
       <StalledTerminalDaemonBanner />
@@ -289,6 +315,8 @@ function Sidebar({
               onWorkspaceBoardDragPreviewCommit={solidifyWorkspaceBoardFromDrag}
               onWorkspaceBoardDragPreviewCancel={cancelWorkspaceBoardDragPreview}
               projectsCollapseTarget={projectsCollapseTarget}
+              hostIdsOverride={classicMode ? null : hostIdsOverride}
+              emptyStateMessage={zoneEmptyMessage}
             />
           </SidebarProjectsListSlot>
           {projectsCollapsed ? null : <WslMovedProjectsSection />}
@@ -296,7 +324,7 @@ function Sidebar({
         </>
       )}
     </React.Fragment>
-  )
+  ) : null
 
   return (
     <TooltipProvider>
@@ -327,7 +355,22 @@ function Sidebar({
               >
                 <SidebarContentViewport>
                   <SidebarNav />
-                  {projectsFirst ? [projectsSection, botsSection] : [botsSection, projectsSection]}
+                  {!appRailVisible && sidebarBody !== 'agents' ? (
+                    <SidebarZoneSwitcher
+                      mode={zoneMode}
+                      onChange={setZoneMode}
+                      botsEnabled={botsEnabled}
+                      teamCount={teamCount}
+                      botCount={botCount}
+                      winHostCount={classifiedHosts.winHostCount}
+                      macHostCount={classifiedHosts.macHostCount}
+                    />
+                  ) : null}
+                  {classicMode
+                    ? projectsFirst
+                      ? [projectsSection, botsSection]
+                      : [botsSection, projectsSection]
+                    : [botsSection, projectsSection]}
                 </SidebarContentViewport>
                 <SidebarSectionDragOverlay sidebarStyle={leftSidebarStyle} />
               </DndContext>

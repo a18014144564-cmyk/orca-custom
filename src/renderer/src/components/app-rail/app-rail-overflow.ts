@@ -19,11 +19,16 @@ export type AppRailPartition = {
  * from the bottom of the top group up. Workspaces, "…" and the account button always stay (the floor); the account
  * button never folds, and the rail never scrolls.
  */
-export function partitionAppRail(destinationCount: number, capacity: number): AppRailPartition {
-  if (1 + destinationCount + 1 + 1 <= capacity) {
+export function partitionAppRail(
+  destinationCount: number,
+  capacity: number,
+  leadingSlotCount = 1
+): AppRailPartition {
+  const floorSlots = leadingSlotCount + 2
+  if (leadingSlotCount + destinationCount + 2 <= capacity) {
     return { shownDestinations: destinationCount, more: false }
   }
-  const shownDestinations = Math.min(destinationCount, Math.max(0, capacity - 3))
+  const shownDestinations = Math.min(destinationCount, Math.max(0, capacity - floorSlots))
   // Nothing folded (no destinations to fold) keeps the slot as Customize.
   return { shownDestinations, more: shownDestinations < destinationCount }
 }

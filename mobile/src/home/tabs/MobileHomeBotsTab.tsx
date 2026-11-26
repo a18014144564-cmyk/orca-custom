@@ -1,5 +1,5 @@
 import { Bot, Plus } from 'lucide-react-native'
-import { useMemo } from 'react'
+import { useMemo, type ReactNode } from 'react'
 import { ActivityIndicator, ScrollView, View } from 'react-native'
 import { MobileBotsListEnd } from '../../bots/MobileBotsSectionHeader'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
@@ -11,6 +11,7 @@ import { translate } from '../../i18n/mobile-i18n'
 import { homeBotRowsByComputer, MobileHomeBotRows } from '../bots/MobileHomeBotRow'
 import { MobileHomeSectionHeading } from '../MobileHomeSectionHeading'
 import type { MobileHomeData } from '../use-mobile-home-data'
+import { filterHomeBotRowsByKind } from './mobile-four-zone'
 import { MobileHomeTabEmpty } from './MobileHomeTabEmpty'
 import { MobileHomeTabHeader, MobileHomeTabHeaderButton } from './MobileHomeTabHeader'
 
@@ -21,26 +22,45 @@ export function MobileHomeBotsTab(props: {
   /** Absent when no connected computer takes a new bot. */
   onNewBot?: () => void
   onOpenBot: (row: HomeBotRow) => void
+  /** Optional 4-zone filter: 'bot' isolates individual bots from teams. */
+  rowKind?: 'all' | 'bot' | 'group'
+  titleOverride?: string
+  trailingExtra?: ReactNode
 }) {
   const t = useMobileTranslation()
   const { isWideLayout, contentMaxWidth } = useResponsiveLayout()
-  const { data } = props
+  const { data, rowKind = 'all' } = props
   const header = (
     <MobileHomeTabHeader
-      title={t('home.tabs.bots', 'Bots')}
+      title={props.titleOverride ?? t('home.tabs.bots', 'Bots')}
       trailing={
-        props.onNewBot ? (
-          <MobileHomeTabHeaderButton
-            icon={Plus}
-            accessibilityLabel={t('bots.new.title', 'New bot')}
-            onPress={props.onNewBot}
-          />
+        props.trailingExtra || props.onNewBot ? (
+          <>
+            {props.trailingExtra}
+            {props.onNewBot ? (
+              <MobileHomeTabHeaderButton
+                icon={Plus}
+                accessibilityLabel={t('bots.new.title', 'New bot')}
+                onPress={props.onNewBot}
+              />
+            ) : null}
+          </>
         ) : undefined
       }
     />
   )
-  const notice = useMemo(() => homeBotsNotice(data.bots), [data.bots])
-  const computers = useMemo(() => homeBotRowsByComputer(data.bots.rows), [data.bots.rows])
+  const rows = useMemo(() => filterHomeBotRowsByKind(data.bots.rows, rowKind), [data.bots.rows, rowKind])
+  const notice = useMemo(
+    () =>
+      homeBotsNotice({
+        rows,
+        unavailable: data.bots.unavailable,
+        listable: data.bots.listable,
+        awaiting: data.bots.awaiting
+      }),
+    [data.bots.awaiting, data.bots.listable, data.bots.unavailable, rows]
+  )
+  const computers = useMemo(() => homeBotRowsByComputer(rows), [rows])
   if (!data.hostCatalogLoaded) {
     return header
   }
@@ -56,7 +76,6 @@ export function MobileHomeBotsTab(props: {
       </>
     )
   }
-  const { rows } = data.bots
   return (
     <>
       {header}

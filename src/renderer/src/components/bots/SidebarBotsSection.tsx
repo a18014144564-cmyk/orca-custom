@@ -64,10 +64,18 @@ const BOT_MENU_ROW = 'flex min-h-5 items-center gap-2'
 /** Lists bots from this computer and paired servers in the sidebar. */
 export function SidebarBotsSection({
   onOpenBot,
-  reorderable = false
+  reorderable = false,
+  entryFilter = 'all',
+  standalone = false,
+  titleOverride
 }: {
   onOpenBot: () => void
   reorderable?: boolean
+  /** Optional 4-zone filter: show only bot teams ('groups') or individual bots ('bots'). */
+  entryFilter?: 'all' | 'groups' | 'bots'
+  /** Standalone full-height mode used when the 4-zone sidebar isolates teams or bots. */
+  standalone?: boolean
+  titleOverride?: string
 }): React.JSX.Element {
   const t = useTranslate()
   const bots = useBots()
@@ -94,9 +102,18 @@ export function SidebarBotsSection({
   const [importOpen, setImportOpen] = useState(false)
   const [editingGroup, setEditingGroup] = useState<BotGroup | 'new' | null>(null)
   // Bots and groups share one list and one order; the folded header shows bots only.
-  const savedEntries = useMemo(
+  const allSavedEntries = useMemo(
     () => getHostKeyedBotSidebarEntries(bots, groups, folderWorkspaces),
     [bots, groups, folderWorkspaces]
+  )
+  const savedEntries = useMemo(
+    () =>
+      entryFilter === 'all'
+        ? allSavedEntries
+        : allSavedEntries.filter((entry) =>
+            entryFilter === 'groups' ? entry.kind === 'group' : entry.kind === 'bot'
+          ),
+    [allSavedEntries, entryFilter]
   )
   const entries = useBotSidebarArrangement(savedEntries)
   const listRef = useRef<HTMLDivElement>(null)
@@ -113,7 +130,7 @@ export function SidebarBotsSection({
   const hasEntries = savedEntries.length > 0
   // Folds even while empty, so the onboarding card can be put away. A fold landing mid-search
   // (another writer) still leaves the results showing until the search ends.
-  const collapsed = savedCollapsed && !searchOpen
+  const collapsed = !standalone && savedCollapsed && !searchOpen
   // The + menu unmounts with the folded header's controls; a fold it didn't see must not reopen it on unfold.
   if (collapsed && newMenuOpen) {
     setNewMenuOpen(false)
@@ -184,28 +201,32 @@ export function SidebarBotsSection({
   return (
     // The sidebar's SidebarBotsSplit owns this section's height cap.
     // While searching it fills the held split, so the search area can center an empty result.
-    <div className={cn('flex min-h-0 flex-col', searchOpen && 'grow')}>
+    <div className={cn('flex min-h-0 flex-col', (searchOpen || standalone) && 'flex-1')}>
       {/* Each folded face is a button of its own above the shared fold button. */}
       <SidebarSectionHeader
-        title={t('bots.section.title', 'Bots')}
-        sectionId="bots"
-        reorderable={reorderable}
-        fold={{
-          collapsed,
-          label: t(
-            'bots.section.summary',
-            '{{action}}, {{total}} bots, {{attention}} need you, {{unread}} unread, {{working}} working',
-            {
-              action: collapseLabel,
-              total: preview.total,
-              attention: preview.attention,
-              unread: preview.unread,
-              working: preview.working
-            }
-          ),
-          tooltip: collapseLabel,
-          onToggle: toggleBots
-        }}
+        title={titleOverride ?? t('bots.section.title', 'Bots')}
+        sectionId={entryFilter === 'groups' ? 'bot-teams' : 'bots'}
+        reorderable={!standalone && reorderable}
+        fold={
+          standalone
+            ? undefined
+            : {
+                collapsed,
+                label: t(
+                  'bots.section.summary',
+                  '{{action}}, {{total}} bots, {{attention}} need you, {{unread}} unread, {{working}} working',
+                  {
+                    action: collapseLabel,
+                    total: preview.total,
+                    attention: preview.attention,
+                    unread: preview.unread,
+                    working: preview.working
+                  }
+                ),
+                tooltip: collapseLabel,
+                onToggle: toggleBots
+              }
+        }
         titleAccessory={
           !collapsed && collapseAll && !searchOpen ? (
             <BotsCollapseAllButton collapseAll={collapseAll} />
@@ -336,7 +357,24 @@ export function SidebarBotsSection({
                 </div>
               )
             ) : entries.length === 0 ? (
-              collapsed ? null : (
+              collapsed ? null : entryFilter === 'groups' ? (
+                <div className="mx-2 rounded-[10px] bg-foreground/[0.03] p-3 text-xs text-muted-foreground ring-1 ring-foreground/[0.06] ring-inset">
+                  <div className="font-medium text-foreground">暂无 Bot 团队</div>
+                  <p className="mt-1 leading-relaxed">
+                    将至少 2 个 Bot 组成团队群聊，统一分工协作。
+                  </p>
+                  <Button
+                    type="button"
+                    size="xs"
+                    className="mt-2.5"
+                    disabled={bots.length < 2}
+                    onClick={() => setEditingGroup('new')}
+                  >
+                    <Users className="size-3.5" />
+                    {t('bots.groups.newGroup', 'New group')}
+                  </Button>
+                </div>
+              ) : (
                 <SidebarBotsEmptyState onNewBot={openNewBot} />
               )
             ) : collapsed ? null : (

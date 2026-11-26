@@ -2,8 +2,11 @@ import {
   Bot,
   CalendarClock,
   Gauge,
+  Laptop,
   LayoutList,
+  Monitor,
   SquareTerminal,
+  Users,
   type LucideIcon
 } from 'lucide-react-native'
 import { useEffect, useState } from 'react'
@@ -22,8 +25,11 @@ import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { HOME_EASE_OUT, type HomeTabId } from './home-tabs'
 
 const TAB_ICONS: Record<HomeTabId, LucideIcon> = {
-  feed: LayoutList,
+  teams: Users,
   bots: Bot,
+  win: Monitor,
+  mac: Laptop,
+  feed: LayoutList,
   agents: SquareTerminal,
   usage: Gauge,
   automations: CalendarClock
@@ -39,20 +45,32 @@ export function MobileHomeTabBar(props: {
   agentsBadge: number
   /** Bots' Needs you items; shown on Bots. */
   botsBadge: number
+  /** Bot teams' Needs you items; shown on Teams. */
+  teamsBadge?: number
+  /** Windows hosts' Needs you items; shown on Win. */
+  winBadge?: number
+  /** Mac hosts' Needs you items; shown on Mac. */
+  macBadge?: number
   onSelect: (tab: HomeTabId) => void
 }) {
   const t = useMobileTranslation()
   useMobileColorScheme()
   const labels: Record<HomeTabId, string> = {
+    teams: '团队',
+    bots: 'Bot',
+    win: 'Win',
+    mac: 'Mac',
     feed: t('home.tabs.feed', 'Feed'),
-    bots: t('home.tabs.bots', 'Bots'),
     agents: t('home.tabs.agents', 'Agents'),
     usage: t('home.tabs.usage', 'Usage'),
     automations: t('home.tabs.automations', 'Automations')
   }
   const badges: Partial<Record<HomeTabId, number>> = {
-    agents: props.agentsBadge,
-    bots: props.botsBadge
+    teams: props.teamsBadge ?? 0,
+    bots: props.botsBadge,
+    win: props.winBadge ?? 0,
+    mac: props.macBadge ?? 0,
+    agents: props.agentsBadge
   }
   return (
     <View

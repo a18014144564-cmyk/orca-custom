@@ -1,0 +1,86 @@
+name: Build Custom Desktop Apps (Windows & macOS)
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_windows:
+        description: 'Build Windows installer (.exe)'
+        type: boolean
+        default: true
+      build_macos:
+        description: 'Build macOS installer (.dmg)'
+        type: boolean
+        default: true
+
+jobs:
+  build-windows:
+    if: ${{ inputs.build_windows }}
+    runs-on: windows-2022
+    timeout-minutes: 90
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Enable Corepack (pnpm 12)
+        run: corepack enable
+
+      - name: Install dependencies (with native rebuild)
+        shell: pwsh
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Windows Desktop Installer
+        shell: pwsh
+        run: pnpm run build:win
+
+      - name: Upload Windows Installer Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Orca-Custom-Windows
+          path: |
+            dist/*.exe
+            dist/*.blockmap
+          if-no-files-found: error
+          retention-days: 14
+
+  build-macos:
+    if: ${{ inputs.build_macos }}
+    runs-on: macos-15
+    timeout-minutes: 90
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Enable Corepack (pnpm 12)
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build macOS Desktop Installer
+        run: pnpm run build:mac
+
+      - name: Upload macOS Installer Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Orca-Custom-macOS
+          path: |
+            dist/*.dmg
+            dist/*.zip
+          if-no-files-found: error
+          retention-days: 14

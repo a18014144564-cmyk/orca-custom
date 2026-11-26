@@ -7,10 +7,12 @@ import { isRepoHidden } from '../../../../../../shared/project/catalog/hidden-pr
 
 export function SidebarWorktreeListEmptyState({
   hasFilters,
-  onClearFilters
+  onClearFilters,
+  emptyMessage
 }: {
   hasFilters: boolean
   onClearFilters: () => void
+  emptyMessage?: string
 }): React.JSX.Element {
   const t = useTranslate()
   const discoveryCompleted = useAppStore((s) => s.startupWorktreeRefreshCompleted)
@@ -26,7 +28,8 @@ export function SidebarWorktreeListEmptyState({
         <div className="flex flex-col items-center gap-2 px-4 py-6 text-center text-[11px] text-muted-foreground">
           {discoveryCompleted && (
             <span>
-              {t('auto.components.sidebar.WorktreeList.b7acbf038b', 'No workspaces found')}
+              {emptyMessage ??
+                t('auto.components.sidebar.WorktreeList.b7acbf038b', 'No workspaces found')}
             </span>
           )}
           {everyProjectHidden && (

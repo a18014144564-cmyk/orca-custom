@@ -94,6 +94,16 @@ export function activateWorkspacesRailItem(store: RailNavigationStore): void {
   }
 }
 
+/** Ensures the workspace sidebar is visible without collapsing it when switching between 4-zone tabs. */
+export function ensureWorkspacesRailListOpen(store: RailNavigationStore): void {
+  const { getState } = store
+  returnToTerminalView(store)
+  getState().setSidebarBody('workspaces')
+  if (!getState().sidebarOpen) {
+    getState().setSidebarOpen(true)
+  }
+}
+
 /**
  * On a rail page (rail on), commands about the workspace list (the sidebar toggle, Cmd+B, the Agent Dashboard and the
  * Workspace Board) go to Workspaces with the list showing, then run `action`. Returns false anywhere else, so the

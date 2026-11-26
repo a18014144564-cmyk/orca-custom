@@ -1,0 +1,75 @@
+name: Build Custom iOS Unsigned IPA (Self-Sign)
+
+on:
+  workflow_dispatch:
+    inputs:
+      bundle_id:
+        description: 'Optional iOS Bundle Identifier for self-signing'
+        required: false
+        default: 'com.stably.orca.mobile'
+
+jobs:
+  build-unsigned-ipa:
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Enable Corepack (pnpm 12)
+        run: corepack enable
+
+      - name: Install root workspace packages
+        run: |
+          pnpm install --frozen-lockfile --ignore-scripts
+          node config/scripts/workspace-package-build/build-workspace-packages.mjs
+
+      - name: Install mobile dependencies
+        working-directory: mobile
+        run: pnpm install --frozen-lockfile
+
+      - name: Prebuild iOS native project
+        working-directory: mobile
+        env:
+          ORCA_IOS_APS_ENVIRONMENT: development
+          NODE_OPTIONS: --max-old-space-size=4096
+        run: npx expo prebuild --platform ios --clean --no-install
+
+      - name: Install CocoaPods
+        working-directory: mobile/ios
+        run: pod install --repo-update
+
+      - name: Build unsigned Release .app
+        working-directory: mobile/ios
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+        run: |
+          xcodebuild \
+            -workspace Orca.xcworkspace \
+            -scheme Orca \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build
+
+      - name: Package unsigned .ipa
+        working-directory: mobile/ios
+        run: |
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/Orca.app Payload/
+          zip -r -y ../Orca-Custom-unsigned.ipa Payload
+
+      - name: Upload Unsigned IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Orca-Custom-unsigned-ipa
+          path: mobile/Orca-Custom-unsigned.ipa
+          retention-days: 14

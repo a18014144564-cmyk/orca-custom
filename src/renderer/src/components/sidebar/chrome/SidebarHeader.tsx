@@ -18,6 +18,7 @@ type SidebarHeaderProps = {
   /** Only with Bots present, so the sidebar never folds down to nothing. */
   collapsible?: boolean
   projectsCollapseTarget?: React.Ref<HTMLDivElement>
+  titleOverride?: string
 }
 
 const SidebarHeader = React.memo(function SidebarHeader({
@@ -25,7 +26,8 @@ const SidebarHeader = React.memo(function SidebarHeader({
   onWorkspaceBoardMenuOpenChange,
   activityOptionsTarget,
   collapsible = false,
-  projectsCollapseTarget
+  projectsCollapseTarget,
+  titleOverride
 }: SidebarHeaderProps) {
   const t = useTranslate()
   // Subscribe this memoized header to locale changes before using translate().
@@ -52,9 +54,10 @@ const SidebarHeader = React.memo(function SidebarHeader({
   )
   const toggleCollapsedGroup = useAppStore((s) => s.toggleCollapsedGroup)
   const sidebarTitle =
-    groupBy === 'repo'
+    titleOverride ??
+    (groupBy === 'repo'
       ? t('dashboard.sidebar.projects', 'Projects')
-      : t('dashboard.sidebar.workspaces', 'Workspaces')
+      : t('dashboard.sidebar.workspaces', 'Workspaces'))
   const activityLabel = t(
     agentsViewActive ? 'dashboard.sidebar.closeActivity' : 'dashboard.sidebar.openActivity',
     agentsViewActive ? 'Turn off activity view' : 'View activity'

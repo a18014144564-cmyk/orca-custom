@@ -1,4 +1,5 @@
 import { useFocusEffect } from 'expo-router'
+import { LayoutGrid, Settings } from 'lucide-react-native'
 import { useCallback, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Alert, BackHandler, View } from 'react-native'
@@ -28,13 +29,15 @@ import { loadHostCatalog } from '../host-catalog/host-store'
 import type { HostCatalogEntry, HostProfile } from '../host-catalog/host-profile'
 import { useOpenMobileHostEdit } from '../host-screen/identity/use-open-mobile-host-edit'
 import { mobileConnectionPathLabel } from '../transport/connection/mobile-connection-path-label'
-import { newWorkspaceOverlayHref } from '../new-workspace/new-workspace-overlay-route'
 import { useMobileHomeData } from './use-mobile-home-data'
 import { useHomeSparePage } from './use-home-spare-page'
-import { HOME_TABS, type HomeTabId } from './tabs/home-tabs'
 import { MobileHomeAgentsTab } from './tabs/MobileHomeAgentsTab'
 import { MobileHomeAutomationsTab } from './tabs/MobileHomeAutomationsTab'
 import { MobileHomeBotsTab } from './tabs/MobileHomeBotsTab'
+import { MobileHomePlatformHostsTab } from './tabs/MobileHomePlatformHostsTab'
+import { MobileHomeTeamsTab } from './tabs/MobileHomeTeamsTab'
+import { MobileHomeTabHeaderButton } from './tabs/MobileHomeTabHeader'
+import { useMobileFourZoneHome } from './tabs/use-mobile-four-zone'
 import { HomeNewBotSheet } from './bots/HomeNewBotSheet'
 import { homeNewBotComputers, type HomeBotRow } from './bots/home-bot-rows'
 import { useOpenBotHome } from '../bots/use-open-bot-home'
@@ -62,9 +65,8 @@ export function MobileHomeScreen() {
   const forceReconnectHost = useForceReconnect()
   const [actionTarget, setActionTarget] = useState<HostProfile | null>(null)
   const [confirmRemove, setConfirmRemove] = useState<{ id: string; name: string } | null>(null)
-  const [tab, setTab] = useState<HomeTabId>('feed')
-  // A tab mounts on first visit and then stays mounted, keeping its scroll and data.
-  const [visitedTabs, setVisitedTabs] = useState<ReadonlySet<HomeTabId>>(() => new Set(['feed']))
+  const zone = useMobileFourZoneHome(data)
+  const { layoutMode, activeTabs, defaultTab, tab, visitedTabs, selectTab, toggleLayoutMode } = zone
   const [automationsHostId, setAutomationsHostId] = useState<string | null>(null)
   const [newBotOpen, setNewBotOpen] = useState(false)
   const openBotHome = useOpenBotHome({ standalone: true })
@@ -75,23 +77,18 @@ export function MobileHomeScreen() {
     data.applyAgentActivity
   )
 
-  const selectTab = useCallback((next: HomeTabId) => {
-    setTab(next)
-    setVisitedTabs((visited) => (visited.has(next) ? visited : new Set([...visited, next])))
-  }, [])
-
-  // Android Back from another tab returns to Feed before it leaves the app.
+  // Android Back from another tab returns to the primary tab before it leaves the app.
   useFocusEffect(
     useCallback(() => {
-      if (tab === 'feed') {
+      if (tab === defaultTab) {
         return undefined
       }
       const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-        selectTab('feed')
+        selectTab(defaultTab)
         return true
       })
       return () => subscription.remove()
-    }, [selectTab, tab])
+    }, [defaultTab, selectTab, tab])
   )
 
   // Stable handlers keep the memoized Feed sections and desktop rows from redrawing on every Home update.
@@ -181,29 +178,26 @@ export function MobileHomeScreen() {
   const actionTargetConnected =
     actionTarget != null && data.hostStates[actionTarget.id] === 'connected'
 
-  const paired = data.hostCatalogLoaded && data.hostCatalog.length > 0
+  const {
+    partitionedCatalog,
+    partitionedProfiles,
+    teamsBadge,
+    soloBotsBadge,
+    winBadge,
+    macBadge,
+    resolveHomeFab
+  } = zone
+
   const automationsHostConnected =
     automationsHostId != null && data.hostStates[automationsHostId] === 'connected'
-  const fab =
-    tab === 'feed' && paired
-      ? {
-          label: t('home.bottomBar.newWorkspace', 'New workspace'),
-          disabled: data.connectedHosts.length === 0,
-          // A desktop still on its first connect would make the hint flash at launch.
-          hint: data.hostsConnecting
-            ? undefined
-            : t('home.bottomBar.connectFirst', 'Connect a desktop to start new work.'),
-          onPress: () =>
-            data.router.push(newWorkspaceOverlayHref(data.connectedHosts.map((host) => host.id)))
-        }
-      : tab === 'automations' && automationsHostId && automationsHostConnected
-        ? {
-            label: t('home.automationsTab.newAutomation', 'New automation'),
-            disabled: false,
-            hint: undefined,
-            onPress: () => openMobileAutomations(automationsHostId, { create: true })
-          }
-        : null
+  const fab = resolveHomeFab({
+    automationsHostId,
+    automationsHostConnected,
+    newWorkspaceLabel: t('home.bottomBar.newWorkspace', 'New workspace'),
+    connectFirstHint: t('home.bottomBar.connectFirst', 'Connect a desktop to start new work.'),
+    newAutomationLabel: t('home.automationsTab.newAutomation', 'New automation'),
+    onOpenAutomations: (hostId) => openMobileAutomations(hostId, { create: true })
+  })
   // The floating button covers the last row unless the list can scroll past it.
   const contentBottom = spacing.xl + (fab ? FAB_CLEARANCE : 0)
 
@@ -212,10 +206,47 @@ export function MobileHomeScreen() {
     <GestureHandlerRootView style={styles.fill}>
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.fill}>
-          {HOME_TABS.map((id) =>
+          {activeTabs.map((id) =>
             visitedTabs.has(id) ? (
               <View key={id} style={id === tab ? styles.fill : styles.hidden}>
-                {id === 'feed' ? (
+                {id === 'teams' ? (
+                  <MobileHomeTeamsTab
+                    data={data}
+                    bottomInset={contentBottom}
+                    onOpenBot={openBot}
+                    onPairDesktop={pairDesktop}
+                    onOpenSettings={openSettings}
+                    onToggleClassicLayout={toggleLayoutMode}
+                  />
+                ) : id === 'win' ? (
+                  <MobileHomePlatformHostsTab
+                    platform="win"
+                    data={data}
+                    hosts={partitionedCatalog.winHosts}
+                    profiles={partitionedProfiles.winHosts}
+                    bottomInset={contentBottom}
+                    agentHandlers={agentActions.handlers}
+                    onOpenHost={openHost}
+                    onOpenHostActions={openHostActions}
+                    onPairDesktop={pairDesktop}
+                    onOpenSettings={openSettings}
+                    onToggleClassicLayout={toggleLayoutMode}
+                  />
+                ) : id === 'mac' ? (
+                  <MobileHomePlatformHostsTab
+                    platform="mac"
+                    data={data}
+                    hosts={partitionedCatalog.macHosts}
+                    profiles={partitionedProfiles.macHosts}
+                    bottomInset={contentBottom}
+                    agentHandlers={agentActions.handlers}
+                    onOpenHost={openHost}
+                    onOpenHostActions={openHostActions}
+                    onPairDesktop={pairDesktop}
+                    onOpenSettings={openSettings}
+                    onToggleClassicLayout={toggleLayoutMode}
+                  />
+                ) : id === 'feed' ? (
                   <MobileHomeFeedTab
                     data={data}
                     bottomInset={contentBottom}
@@ -235,6 +266,30 @@ export function MobileHomeScreen() {
                     bottomInset={contentBottom}
                     onNewBot={canCreateBot ? openNewBot : undefined}
                     onOpenBot={openBot}
+                    rowKind={layoutMode === 'four-zone' ? 'bot' : 'all'}
+                    titleOverride={layoutMode === 'four-zone' ? '单独 Bot' : undefined}
+                    trailingExtra={
+                      layoutMode === 'four-zone' ? (
+                        <>
+                          <MobileHomeTabHeaderButton
+                            icon={LayoutGrid}
+                            accessibilityLabel="切换经典视图"
+                            onPress={toggleLayoutMode}
+                          />
+                          <MobileHomeTabHeaderButton
+                            icon={Settings}
+                            accessibilityLabel={t('common.settings', 'Settings')}
+                            onPress={openSettings}
+                          />
+                        </>
+                      ) : (
+                        <MobileHomeTabHeaderButton
+                          icon={LayoutGrid}
+                          accessibilityLabel="切回四区视图"
+                          onPress={toggleLayoutMode}
+                        />
+                      )
+                    }
                   />
                 ) : id === 'agents' ? (
                   <MobileHomeAgentsTab
@@ -276,11 +331,14 @@ export function MobileHomeScreen() {
         />
         <View onLayout={(event) => setTabBarHeight(event.nativeEvent.layout.height)}>
           <MobileHomeTabBar
-            tabs={HOME_TABS}
+            tabs={activeTabs}
             active={tab}
             bottomInset={insets.bottom}
             agentsBadge={data.agentsNeedingYou.length}
-            botsBadge={data.bots.needsYou}
+            botsBadge={layoutMode === 'four-zone' ? soloBotsBadge : data.bots.needsYou}
+            teamsBadge={teamsBadge}
+            winBadge={winBadge}
+            macBadge={macBadge}
             onSelect={selectTab}
           />
         </View>

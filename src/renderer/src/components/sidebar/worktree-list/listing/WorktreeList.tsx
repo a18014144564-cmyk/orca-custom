@@ -15,7 +15,8 @@ import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { openHeaderCreateComposer } from '../rows/header-create-workspace-target'
 import {
   getRepoExecutionHostId,
-  getSettingsFocusedExecutionHostId
+  getSettingsFocusedExecutionHostId,
+  type ExecutionHostId
 } from '../../../../../../shared/execution-host/execution-host'
 import { getActiveSidebarWorkspaceId } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { getPinnedWorktreeDisplayPolicy } from '../../../../../../shared/sidebar-list/row-types'
@@ -66,6 +67,8 @@ type WorktreeListProps = {
   onWorkspaceBoardDragPreviewCommit?: () => void
   onWorkspaceBoardDragPreviewCancel?: () => void
   projectsCollapseTarget?: HTMLElement | null
+  hostIdsOverride?: readonly ExecutionHostId[] | null
+  emptyStateMessage?: string
 }
 
 // Desktop windows consume main’s sidebar inputs; paired web clients derive their own view.
@@ -82,7 +85,9 @@ const WorktreeList = React.memo(function WorktreeList({
   onWorkspaceBoardDragPreviewStart = NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK,
   onWorkspaceBoardDragPreviewCommit = NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK,
   onWorkspaceBoardDragPreviewCancel = NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK,
-  projectsCollapseTarget
+  projectsCollapseTarget,
+  hostIdsOverride = null,
+  emptyStateMessage
 }: WorktreeListProps) {
   const allWorktrees = useAllWorktrees()
   const repoMap = useRepoMap()
@@ -137,12 +142,25 @@ const WorktreeList = React.memo(function WorktreeList({
   const agentSendTargetWorktreeId = useAgentSendTargetWorktreeId()
   const { filterState, hasFilters, clearFilters, revealWorkspaceFilters } =
     useSidebarWorktreeFilters()
+  const effectiveFilterState = useMemo(() => {
+    if (hostIdsOverride == null) {
+      return filterState
+    }
+    const baseHosts = filterState.visibleWorkspaceHostIds
+    const nextHosts = baseHosts
+      ? hostIdsOverride.filter((id) => baseHosts.includes(id))
+      : [...hostIdsOverride]
+    return {
+      ...filterState,
+      visibleWorkspaceHostIds: nextHosts
+    }
+  }, [filterState, hostIdsOverride])
   const manualOrderCatalog = useMemo(
     () => buildWorktreeManualOrderCatalog({ worktrees: allWorktrees, folderWorkspaces }),
     [allWorktrees, folderWorkspaces]
   )
   const { visibleWorktrees, visibleScope, externalWorktreeCards, rowModel } = useSidebarListModel({
-    filterState,
+    filterState: effectiveFilterState,
     sortBy,
     groupBy,
     projectOrderBy,
@@ -287,7 +305,13 @@ const WorktreeList = React.memo(function WorktreeList({
   )
   // Clear Filters must outrank empty project headers when filtering hides every workspace.
   if (rowModel.rows.length === 0 || filtersHideAllRows) {
-    return <SidebarWorktreeListEmptyState hasFilters={hasFilters} onClearFilters={clearFilters} />
+    return (
+      <SidebarWorktreeListEmptyState
+        hasFilters={hasFilters}
+        onClearFilters={clearFilters}
+        emptyMessage={hostIdsOverride != null ? emptyStateMessage : undefined}
+      />
+    )
   }
 
   return (
@@ -321,7 +345,7 @@ const WorktreeList = React.memo(function WorktreeList({
       />
       <VirtualizedWorktreeViewport
         // Wake moves status headers; preserve viewport identity across those changes.
-        key={`group:${groupBy}:host:${filterState.visibleWorkspaceHostIds?.join(',') ?? 'all'}:lineage`}
+        key={`group:${groupBy}:host:${effectiveFilterState.visibleWorkspaceHostIds?.join(',') ?? 'all'}:lineage`}
         rows={rowModel.sectionRows}
         hostOptions={rowModel.hostOptions}
         occurrencePlan={rowModel.occurrencePlan}

@@ -14,6 +14,15 @@ export type HostMachineDescriptor = {
 // Live descriptor state complements stored lastKnown fields; host-descriptor-recorder writes both.
 const descriptorByHostId = new Map<string, HostMachineDescriptor>()
 const listenersByHostId = new Map<string, Set<() => void>>()
+const globalListeners = new Set<() => void>()
+let descriptorSnapshot: ReadonlyMap<string, HostMachineDescriptor> = new Map()
+
+function notifyGlobalListeners(): void {
+  descriptorSnapshot = new Map(descriptorByHostId)
+  for (const listener of globalListeners) {
+    listener()
+  }
+}
 
 // Record omissions too so readable status replies can clear stale fields.
 export function recordHostDescriptor(hostId: string, descriptor: HostMachineDescriptor): void {
@@ -29,6 +38,7 @@ export function recordHostDescriptor(hostId: string, descriptor: HostMachineDesc
   for (const listener of listenersByHostId.get(hostId) ?? []) {
     listener()
   }
+  notifyGlobalListeners()
 }
 
 /** Drops a removed host's entry so a later re-pair cannot inherit the dead pairing's descriptor. */
@@ -39,6 +49,7 @@ export function forgetHostDescriptor(hostId: string): void {
   for (const listener of listenersByHostId.get(hostId) ?? []) {
     listener()
   }
+  notifyGlobalListeners()
 }
 
 function subscribe(hostId: string, listener: () => void): () => void {
@@ -51,6 +62,21 @@ function subscribe(hostId: string, listener: () => void): () => void {
       listenersByHostId.delete(hostId)
     }
   }
+}
+
+function subscribeAll(listener: () => void): () => void {
+  globalListeners.add(listener)
+  return () => {
+    globalListeners.delete(listener)
+  }
+}
+
+function readAllDescriptors(): ReadonlyMap<string, HostMachineDescriptor> {
+  return descriptorSnapshot
+}
+
+export function useAllHostDescriptors(): ReadonlyMap<string, HostMachineDescriptor> {
+  return useSyncExternalStore(subscribeAll, readAllDescriptors, readAllDescriptors)
 }
 
 export function useHostDescriptor(hostId: string | undefined): HostMachineDescriptor | null {
