@@ -16,7 +16,7 @@
 > **前置环境**：Node.js 24+、Corepack（`corepack enable`）；若需打包完整本地原生 `.exe` 安装包，需安装 Visual Studio Build Tools（勾选「使用 C++ 的桌面开发」以编译 `node-pty`）。
 
 ```powershell
-cd D:\orca\orca-custom
+cd path\to\orca-custom
 corepack enable
 
 # 开发模式启动桌面端
