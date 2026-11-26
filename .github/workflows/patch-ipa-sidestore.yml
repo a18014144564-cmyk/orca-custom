@@ -1,0 +1,74 @@
+name: Patch iOS IPA for SideStore (Fast 20s)
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: 'Run ID containing Orca-Reset-unsigned-ipa artifact'
+        required: true
+        default: '45772074366'
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  patch-ipa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Download built IPA artifact from source run
+        uses: actions/download-artifact@v4
+        with:
+          name: Orca-Reset-unsigned-ipa
+          run-id: ${{ inputs.source_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: work
+
+      - name: Patch Info.plist CFBundleDisplayName to ASCII for SideStore/Apple appIdName
+        run: |
+          set -euo pipefail
+          cd work
+          mkdir -p extracted
+          unzip -q orca-reset-unsigned.ipa -d extracted
+          python3 - <<'PY'
+          import plistlib
+          from pathlib import Path
+
+          info_path = Path("extracted/Payload/Orca.app/Info.plist")
+          with info_path.open("rb") as f:
+              data = plistlib.load(f)
+
+          print("Before Info.plist:", data.get("CFBundleIdentifier"), data.get("CFBundleName"), data.get("CFBundleDisplayName"))
+          data["CFBundleDisplayName"] = "Orca Reset"
+          data["CFBundleName"] = "Orca Reset"
+          with info_path.open("wb") as f:
+              plistlib.dump(data, f, fmt=plistlib.FMT_BINARY)
+          print("After Info.plist:", data.get("CFBundleIdentifier"), data.get("CFBundleName"), data.get("CFBundleDisplayName"))
+
+          zh_strings = Path("extracted/Payload/Orca.app/zh-Hans.lproj/InfoPlist.strings")
+          if zh_strings.exists():
+              print("zh-Hans InfoPlist.strings exists, size:", zh_strings.stat().st_size)
+          PY
+          cd extracted
+          zip -q -r -y ../orca-reset-sidestore.ipa Payload
+          ls -lh ../orca-reset-sidestore.ipa
+
+      - name: Upload patched SideStore IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Orca-Reset-SideStore-IPA
+          path: work/orca-reset-sidestore.ipa
+          retention-days: 14
+
+      - name: Publish direct-download IPA on GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="ios-reset-latest"
+          gh release delete "$TAG" --repo "${{ github.repository }}" --cleanup-tag --yes 2>/dev/null || true
+          gh release create "$TAG" work/orca-reset-sidestore.ipa \
+            --repo "${{ github.repository }}" \
+            --target "${{ github.sha }}" \
+            --title "orca 重置版 iOS (SideStore 自签直装版)" \
+            --notes "已修复 SideStore / Apple Developer Portal 的 appIdName 英文校验（Info.plist 主名改为 Orca Reset，中文桌面仍显示 orca 重置版）。直接点击下方 orca-reset-sidestore.ipa 下载即可用 SideStore 安装。"
