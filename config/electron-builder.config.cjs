@@ -763,11 +763,11 @@ module.exports = {
     target: [
       {
         target: 'dmg',
-        arch: ['x64', 'arm64']
+        arch: process.env.ORCA_MAC_ARCH ? [process.env.ORCA_MAC_ARCH] : ['x64', 'arm64']
       },
       {
         target: 'zip',
-        arch: ['x64', 'arm64']
+        arch: process.env.ORCA_MAC_ARCH ? [process.env.ORCA_MAC_ARCH] : ['x64', 'arm64']
       }
     ]
   },
