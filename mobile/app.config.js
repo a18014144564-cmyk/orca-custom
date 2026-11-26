@@ -3,25 +3,35 @@
 const APS_ENVIRONMENT =
   process.env.ORCA_IOS_APS_ENVIRONMENT === 'production' ? 'production' : 'development'
 
-module.exports = ({ config }) => ({
-  ...config,
-  // `expo run` installs a dev-client build cached for the current native fingerprint instead of
-  // rebuilding; scripts/native-client.mjs populates the cache.
-  buildCacheProvider: { plugin: './scripts/native-build-cache.cjs' },
-  ios: {
-    ...config.ios,
-    entitlements: { ...config.ios?.entitlements, 'aps-environment': APS_ENVIRONMENT }
-  },
-  plugins: (config.plugins ?? []).map((plugin) =>
-    plugin === 'expo-notifications'
-      ? [
-          'expo-notifications',
-          {
-            enableBackgroundRemoteNotifications: true,
-            mode: APS_ENVIRONMENT,
-            icon: './assets/notification-icon.png'
-          }
-        ]
-      : plugin
-  )
-})
+const DISABLE_ANDROID_GOOGLE_SERVICES =
+  process.env.ORCA_ANDROID_DISABLE_GOOGLE_SERVICES === 'true'
+
+module.exports = ({ config }) => {
+  const androidConfig = config.android ? { ...config.android } : undefined
+  if (androidConfig && DISABLE_ANDROID_GOOGLE_SERVICES) {
+    delete androidConfig.googleServicesFile
+  }
+  return {
+    ...config,
+    // `expo run` installs a dev-client build cached for the current native fingerprint instead of
+    // rebuilding; scripts/native-client.mjs populates the cache.
+    buildCacheProvider: { plugin: './scripts/native-build-cache.cjs' },
+    ...(androidConfig ? { android: androidConfig } : {}),
+    ios: {
+      ...config.ios,
+      entitlements: { ...config.ios?.entitlements, 'aps-environment': APS_ENVIRONMENT }
+    },
+    plugins: (config.plugins ?? []).map((plugin) =>
+      plugin === 'expo-notifications'
+        ? [
+            'expo-notifications',
+            {
+              enableBackgroundRemoteNotifications: true,
+              mode: APS_ENVIRONMENT,
+              icon: './assets/notification-icon.png'
+            }
+          ]
+        : plugin
+    )
+  }
+}

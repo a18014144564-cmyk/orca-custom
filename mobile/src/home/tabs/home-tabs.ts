@@ -1,10 +1,15 @@
 import { Easing } from 'react-native-reanimated'
 
-export type FourZoneHomeTabId = 'teams' | 'bots' | 'win' | 'mac'
+export type FourZoneHomeTabId = 'teams' | 'bots' | 'projects' | 'usage'
 export type ClassicHomeTabId = 'feed' | 'bots' | 'agents' | 'usage' | 'automations'
 export type HomeTabId = FourZoneHomeTabId | ClassicHomeTabId
 
-export const FOUR_ZONE_HOME_TABS: readonly FourZoneHomeTabId[] = ['teams', 'bots', 'win', 'mac']
+export const FOUR_ZONE_HOME_TABS: readonly FourZoneHomeTabId[] = [
+  'teams',
+  'bots',
+  'projects',
+  'usage'
+]
 export const CLASSIC_HOME_TABS: readonly ClassicHomeTabId[] = [
   'feed',
   'bots',

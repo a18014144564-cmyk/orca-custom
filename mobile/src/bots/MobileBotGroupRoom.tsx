@@ -26,6 +26,7 @@ import { MobileBotGroupDeleteConfirm } from './MobileBotGroupDeleteConfirm'
 import { botGroupMenuActions } from './bot-group-menu-actions'
 import { botGroupRoomOrder } from '../../../src/shared/bots/bot-group-room-order'
 import { groupNewThread, groupSend, groupStop } from './bot-group-operations'
+import { extractLatestGroupUrl } from './bot-group-hidden-threads'
 import { MobileBotGroupRoomBar } from './MobileBotGroupRoomBar'
 import { MobileBotFaceStack } from './MobileBotFaceStack'
 import { useMobileBotGroupTranscript } from './use-mobile-bot-group-transcript'
@@ -227,13 +228,12 @@ export function MobileBotGroupRoom({
           </>
         }
       />
-      {anyRoomGroup?.threads?.length || threadId ? (
+      {anyRoomGroup ? (
         <MobileBotGroupRoomBar
-          group={anyRoomGroup ?? { name: '', threads: [] }}
-          threadId={threadId}
+          client={client} hostId={hostId} group={anyRoomGroup} threadId={threadId}
+          latestUrl={extractLatestGroupUrl(data?.messages)} connected={connected}
           createDisabled={!connected || startingThread}
-          onOpenRoom={setThreadId}
-          onNewThread={() => void startThread()}
+          onOpenRoom={setThreadId} onNewThread={() => void startThread()} onError={onError}
         />
       ) : null}
       <MobileNativeChatComposerMenuHost style={styles.grow}>

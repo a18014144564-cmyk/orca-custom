@@ -1,14 +1,22 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import type { AgentListRow } from '../../agents/agent-list-rows'
+import { botHomeWorktreeId } from '../../bots/host-bots-read'
 import type { HostCatalogEntry, HostProfile } from '../../host-catalog/host-profile'
 import type { HostMachineDescriptor } from '../../host-descriptors/host-descriptor-store'
+import type { ConnectionState } from '../../transport/connection/connection-state'
+import type { HostWorktreeInfo } from '../../worktree/catalog/home-worktree-info'
+import { isWorktreeActive } from '../../worktree/workspace-list/workspace-row-filtering'
+import type { Worktree } from '../../worktree/workspace-list/workspace-list-types'
 import type { HomeBotRow } from '../bots/home-bot-rows'
 
 export type MobileHomeLayoutMode = 'four-zone' | 'classic'
 export type MobileHostPlatformBucket = 'win' | 'mac' | 'other'
+export type MobileProjectsPlatform = 'win' | 'mac'
+export type PlatformConnectionHealth = 'healthy' | 'abnormal'
 
 export const MOBILE_HOME_LAYOUT_STORAGE_KEY = 'orca.custom.mobileHomeLayout'
 export const DEFAULT_MOBILE_HOME_LAYOUT: MobileHomeLayoutMode = 'four-zone'
+export const MOBILE_PROJECTS_PLATFORM_STORAGE_KEY = 'orca.custom.mobileProjectsPlatform'
 
 export async function loadMobileHomeLayoutMode(): Promise<MobileHomeLayoutMode> {
   try {
@@ -25,6 +33,28 @@ export async function loadMobileHomeLayoutMode(): Promise<MobileHomeLayoutMode> 
 export async function saveMobileHomeLayoutMode(mode: MobileHomeLayoutMode): Promise<void> {
   try {
     await AsyncStorage.setItem(MOBILE_HOME_LAYOUT_STORAGE_KEY, mode)
+  } catch {
+    // Ignore storage write failures.
+  }
+}
+
+export async function loadMobileProjectsPlatform(): Promise<MobileProjectsPlatform | null> {
+  try {
+    const raw = await AsyncStorage.getItem(MOBILE_PROJECTS_PLATFORM_STORAGE_KEY)
+    if (raw === 'win' || raw === 'mac') {
+      return raw
+    }
+  } catch {
+    // Fall back to default when storage is unavailable.
+  }
+  return null
+}
+
+export async function saveMobileProjectsPlatform(
+  platform: MobileProjectsPlatform
+): Promise<void> {
+  try {
+    await AsyncStorage.setItem(MOBILE_PROJECTS_PLATFORM_STORAGE_KEY, platform)
   } catch {
     // Ignore storage write failures.
   }
@@ -143,6 +173,159 @@ export function countNeedsYouForHostIds(
   let total = 0
   for (const id of hostIds) {
     total += needsYouByHost[id] ?? 0
+  }
+  return total
+}
+
+/** Healthy (green dot) only when paired hosts exist and all of them are connected; otherwise abnormal (red dot). */
+export function resolvePlatformConnectionHealth(
+  hosts: readonly Pick<HostCatalogEntry | HostProfile, 'id'>[],
+  hostStates: Readonly<Record<string, ConnectionState | undefined>>
+): PlatformConnectionHealth {
+  if (hosts.length === 0) {
+    return 'abnormal'
+  }
+  return hosts.every((host) => hostStates[host.id] === 'connected') ? 'healthy' : 'abnormal'
+}
+
+export function collectBotHomeWorktreeIds(rows: readonly HomeBotRow[]): ReadonlySet<string> {
+  const ids = new Set<string>()
+  for (const row of rows) {
+    if (row.kind === 'bot') {
+      ids.add(botHomeWorktreeId(row.bot))
+    } else if (row.kind === 'group') {
+      ids.add(botHomeWorktreeId(row.group))
+    }
+  }
+  return ids
+}
+
+export type PlatformProjectItem = Readonly<{
+  key: string
+  host: HostCatalogEntry
+  row: Worktree
+  active: boolean
+  working: boolean
+  unread: boolean
+  lastActivityAt: number
+}>
+
+export type PlatformProjectGroup = Readonly<{
+  key: string
+  host: HostCatalogEntry
+  repo: string
+  items: readonly PlatformProjectItem[]
+  hasAttention: boolean
+  lastActivityAt: number
+}>
+
+function isWorkingWorktree(row: Worktree): boolean {
+  if (row.status === 'working' || row.status === 'permission') {
+    return true
+  }
+  if (Array.isArray(row.agents)) {
+    return row.agents.some((agent) => agent.state === 'working' || agent.state === 'blocked')
+  }
+  return false
+}
+
+function rowTimestamp(row: Worktree): number {
+  return Math.max(row.lastActivityAt ?? 0, row.lastOutputAt ?? 0, row.createdAt ?? 0)
+}
+
+/** Groups non-archived, non-bot worktrees across a platform's paired hosts by repo. */
+export function buildPlatformProjectGroups(args: {
+  hosts: readonly HostCatalogEntry[]
+  worktreeInfo: Readonly<Record<string, HostWorktreeInfo | undefined>>
+  botHomeWorktreeIds: ReadonlySet<string>
+}): readonly PlatformProjectGroup[] {
+  const { hosts, worktreeInfo, botHomeWorktreeIds } = args
+  const groupsByKey = new Map<
+    string,
+    { host: HostCatalogEntry; repo: string; items: PlatformProjectItem[] }
+  >()
+
+  for (const host of hosts) {
+    const rows = worktreeInfo[host.id]?.rows
+    if (!rows || rows.length === 0) {
+      continue
+    }
+    for (const row of rows) {
+      if (
+        row.isArchived === true ||
+        row.botHome === true ||
+        row.repo === 'Bots' ||
+        botHomeWorktreeIds.has(row.worktreeId)
+      ) {
+        continue
+      }
+      const repo = row.repo?.trim() || row.displayName?.trim() || 'Workspace'
+      const groupKey = `${host.id}\n${repo}`
+      let group = groupsByKey.get(groupKey)
+      if (!group) {
+        group = { host, repo, items: [] }
+        groupsByKey.set(groupKey, group)
+      }
+      group.items.push({
+        key: `${host.id}::${row.worktreeId}`,
+        host,
+        row,
+        active: isWorktreeActive(row),
+        working: isWorkingWorktree(row),
+        unread: row.unread === true,
+        lastActivityAt: rowTimestamp(row)
+      })
+    }
+  }
+
+  const groups: PlatformProjectGroup[] = []
+  for (const [key, group] of groupsByKey) {
+    const items = [...group.items].sort((a, b) => {
+      if (a.row.isPinned !== b.row.isPinned) {
+        return a.row.isPinned ? -1 : 1
+      }
+      if (a.working !== b.working) {
+        return a.working ? -1 : 1
+      }
+      if (a.unread !== b.unread) {
+        return a.unread ? -1 : 1
+      }
+      if (a.active !== b.active) {
+        return a.active ? -1 : 1
+      }
+      if (a.lastActivityAt !== b.lastActivityAt) {
+        return b.lastActivityAt - a.lastActivityAt
+      }
+      return (a.row.displayName || a.row.repo).localeCompare(b.row.displayName || b.row.repo)
+    })
+
+    const hasAttention = items.some((item) => item.working || item.unread || item.active)
+    const lastActivityAt = items.reduce((max, item) => Math.max(max, item.lastActivityAt), 0)
+    groups.push({
+      key,
+      host: group.host,
+      repo: group.repo,
+      items,
+      hasAttention,
+      lastActivityAt
+    })
+  }
+
+  return groups.sort((a, b) => {
+    if (a.hasAttention !== b.hasAttention) {
+      return a.hasAttention ? -1 : 1
+    }
+    if (a.lastActivityAt !== b.lastActivityAt) {
+      return b.lastActivityAt - a.lastActivityAt
+    }
+    return a.repo.localeCompare(b.repo)
+  })
+}
+
+export function countPlatformProjectItems(groups: readonly PlatformProjectGroup[]): number {
+  let total = 0
+  for (const group of groups) {
+    total += group.items.length
   }
   return total
 }

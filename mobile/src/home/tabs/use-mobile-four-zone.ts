@@ -9,14 +9,19 @@ import {
   DEFAULT_MOBILE_HOME_LAYOUT,
   filterHomeBotRowsByKind,
   loadMobileHomeLayoutMode,
+  loadMobileProjectsPlatform,
   partitionMobileHostsByPlatform,
   saveMobileHomeLayoutMode,
-  type MobileHomeLayoutMode
+  saveMobileProjectsPlatform,
+  type MobileHomeLayoutMode,
+  type MobileProjectsPlatform
 } from './mobile-four-zone'
 
 export function useMobileFourZoneHome(data: MobileHomeData) {
   const [layoutMode, setLayoutMode] = useState<MobileHomeLayoutMode>(DEFAULT_MOBILE_HOME_LAYOUT)
   const [tab, setTab] = useState<HomeTabId>('teams')
+  const [projectsPlatform, setProjectsPlatform] = useState<MobileProjectsPlatform>('win')
+  const [platformLoaded, setPlatformLoaded] = useState(false)
   const [visitedTabs, setVisitedTabs] = useState<ReadonlySet<HomeTabId>>(
     () => new Set<HomeTabId>(['teams'])
   )
@@ -37,6 +42,15 @@ export function useMobileFourZoneHome(data: MobileHomeData) {
       setTab(firstTab)
       setVisitedTabs((prev) => (prev.has(firstTab) ? prev : new Set([...prev, firstTab])))
     })
+    void loadMobileProjectsPlatform().then((storedPlatform) => {
+      if (!active) {
+        return
+      }
+      if (storedPlatform) {
+        setProjectsPlatform(storedPlatform)
+      }
+      setPlatformLoaded(true)
+    })
     return () => {
       active = false
     }
@@ -45,6 +59,11 @@ export function useMobileFourZoneHome(data: MobileHomeData) {
   const selectTab = useCallback((next: HomeTabId) => {
     setTab(next)
     setVisitedTabs((visited) => (visited.has(next) ? visited : new Set([...visited, next])))
+  }, [])
+
+  const selectProjectsPlatform = useCallback((next: MobileProjectsPlatform) => {
+    setProjectsPlatform(next)
+    void saveMobileProjectsPlatform(next)
   }, [])
 
   const toggleLayoutMode = useCallback(() => {
@@ -98,6 +117,26 @@ export function useMobileFourZoneHome(data: MobileHomeData) {
       ),
     [data.needsYouByHost, partitionedCatalog.macHosts]
   )
+  const projectsBadge = winBadge + macBadge
+
+  useEffect(() => {
+    if (!platformLoaded || !data.hostCatalogLoaded) {
+      return
+    }
+    if (
+      projectsPlatform === 'win' &&
+      partitionedCatalog.winHosts.length === 0 &&
+      partitionedCatalog.macHosts.length > 0
+    ) {
+      setProjectsPlatform('mac')
+    }
+  }, [
+    data.hostCatalogLoaded,
+    partitionedCatalog.macHosts.length,
+    partitionedCatalog.winHosts.length,
+    platformLoaded,
+    projectsPlatform
+  ])
 
   const { router } = data
   const paired = data.hostCatalogLoaded && data.hostCatalog.length > 0
@@ -119,22 +158,23 @@ export function useMobileFourZoneHome(data: MobileHomeData) {
           router.push(newWorkspaceOverlayHref(data.connectedHosts.map((host) => host.id)))
       }
     }
-    if (tab === 'win' && partitionedCatalog.winHosts.length > 0) {
-      return {
-        label: args.newWorkspaceLabel,
-        disabled: connectedWinHosts.length === 0,
-        hint: data.hostsConnecting ? undefined : '先连接 Windows 主机再新建工作区。',
-        onPress: () =>
-          router.push(newWorkspaceOverlayHref(connectedWinHosts.map((host) => host.id)))
-      }
-    }
-    if (tab === 'mac' && partitionedCatalog.macHosts.length > 0) {
-      return {
-        label: args.newWorkspaceLabel,
-        disabled: connectedMacHosts.length === 0,
-        hint: data.hostsConnecting ? undefined : '先连接 Mac 主机再新建工作区。',
-        onPress: () =>
-          router.push(newWorkspaceOverlayHref(connectedMacHosts.map((host) => host.id)))
+    if (tab === 'projects') {
+      const targetCatalog =
+        projectsPlatform === 'win' ? partitionedCatalog.winHosts : partitionedCatalog.macHosts
+      const targetConnected =
+        projectsPlatform === 'win' ? connectedWinHosts : connectedMacHosts
+      if (targetCatalog.length > 0) {
+        return {
+          label: args.newWorkspaceLabel,
+          disabled: targetConnected.length === 0,
+          hint: data.hostsConnecting
+            ? undefined
+            : projectsPlatform === 'win'
+              ? '先连接 Windows 主机再新建工作区。'
+              : '先连接 Mac 主机再新建工作区。',
+          onPress: () =>
+            router.push(newWorkspaceOverlayHref(targetConnected.map((host) => host.id)))
+        }
       }
     }
     if (tab === 'automations' && args.automationsHostId && args.automationsHostConnected) {
@@ -157,12 +197,13 @@ export function useMobileFourZoneHome(data: MobileHomeData) {
     visitedTabs,
     selectTab,
     toggleLayoutMode,
+    projectsPlatform,
+    selectProjectsPlatform,
     partitionedCatalog,
     partitionedProfiles,
     teamsBadge,
     soloBotsBadge,
-    winBadge,
-    macBadge,
+    projectsBadge,
     resolveHomeFab
   }
 }

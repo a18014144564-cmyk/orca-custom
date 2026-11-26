@@ -1,5 +1,5 @@
 import { Gauge, RefreshCw } from 'lucide-react-native'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
 import Animated, {
   FadeIn,
@@ -50,6 +50,7 @@ export function MobileHomeUsageTab(props: {
   stats: HomeStatsSummary | null
   bottomInset: number
   onOpenAccounts: (hostId: string) => void
+  trailingExtra?: ReactNode
 }) {
   const t = useMobileTranslation()
   useMobileColorScheme()
@@ -80,14 +81,19 @@ export function MobileHomeUsageTab(props: {
       <MobileHomeTabHeader
         title={t('home.tabs.usage', 'Usage')}
         trailing={
-          host ? (
-            <MobileHomeTabHeaderButton
-              icon={RefreshCw}
-              spinning={refreshing}
-              disabled={!connected || !client}
-              accessibilityLabel={t('home.usage.refresh', 'Refresh usage')}
-              onPress={() => void refresh()}
-            />
+          host || props.trailingExtra ? (
+            <>
+              {host ? (
+                <MobileHomeTabHeaderButton
+                  icon={RefreshCw}
+                  spinning={refreshing}
+                  disabled={!connected || !client}
+                  accessibilityLabel={t('home.usage.refresh', 'Refresh usage')}
+                  onPress={() => void refresh()}
+                />
+              ) : null}
+              {props.trailingExtra}
+            </>
           ) : undefined
         }
       />

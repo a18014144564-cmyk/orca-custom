@@ -1,10 +1,9 @@
 import {
   Bot,
   CalendarClock,
+  FolderGit2,
   Gauge,
-  Laptop,
   LayoutList,
-  Monitor,
   SquareTerminal,
   Users,
   type LucideIcon
@@ -27,8 +26,7 @@ import { HOME_EASE_OUT, type HomeTabId } from './home-tabs'
 const TAB_ICONS: Record<HomeTabId, LucideIcon> = {
   teams: Users,
   bots: Bot,
-  win: Monitor,
-  mac: Laptop,
+  projects: FolderGit2,
   feed: LayoutList,
   agents: SquareTerminal,
   usage: Gauge,
@@ -47,10 +45,8 @@ export function MobileHomeTabBar(props: {
   botsBadge: number
   /** Bot teams' Needs you items; shown on Teams. */
   teamsBadge?: number
-  /** Windows hosts' Needs you items; shown on Win. */
-  winBadge?: number
-  /** Mac hosts' Needs you items; shown on Mac. */
-  macBadge?: number
+  /** Combined Win + Mac hosts' Needs you items; shown on Projects. */
+  projectsBadge?: number
   onSelect: (tab: HomeTabId) => void
 }) {
   const t = useMobileTranslation()
@@ -58,8 +54,7 @@ export function MobileHomeTabBar(props: {
   const labels: Record<HomeTabId, string> = {
     teams: '团队',
     bots: 'Bot',
-    win: 'Win',
-    mac: 'Mac',
+    projects: '项目',
     feed: t('home.tabs.feed', 'Feed'),
     agents: t('home.tabs.agents', 'Agents'),
     usage: t('home.tabs.usage', 'Usage'),
@@ -68,8 +63,7 @@ export function MobileHomeTabBar(props: {
   const badges: Partial<Record<HomeTabId, number>> = {
     teams: props.teamsBadge ?? 0,
     bots: props.botsBadge,
-    win: props.winBadge ?? 0,
-    mac: props.macBadge ?? 0,
+    projects: props.projectsBadge ?? 0,
     agents: props.agentsBadge
   }
   return (

@@ -34,10 +34,11 @@ import { useHomeSparePage } from './use-home-spare-page'
 import { MobileHomeAgentsTab } from './tabs/MobileHomeAgentsTab'
 import { MobileHomeAutomationsTab } from './tabs/MobileHomeAutomationsTab'
 import { MobileHomeBotsTab } from './tabs/MobileHomeBotsTab'
-import { MobileHomePlatformHostsTab } from './tabs/MobileHomePlatformHostsTab'
+import { MobileHomeProjectsTab } from './tabs/MobileHomeProjectsTab'
 import { MobileHomeTeamsTab } from './tabs/MobileHomeTeamsTab'
 import { MobileHomeTabHeaderButton } from './tabs/MobileHomeTabHeader'
 import { useMobileFourZoneHome } from './tabs/use-mobile-four-zone'
+import type { Worktree } from '../worktree/workspace-list/workspace-list-types'
 import { HomeNewBotSheet } from './bots/HomeNewBotSheet'
 import { homeNewBotComputers, type HomeBotRow } from './bots/home-bot-rows'
 import { useOpenBotHome } from '../bots/use-open-bot-home'
@@ -116,6 +117,20 @@ export function MobileHomeScreen() {
     [router, setHostCatalog, t]
   )
 
+  const openWorktree = useCallback(
+    (host: HostCatalogEntry, row: Worktree) => {
+      if (host.credentialStatus === 'missing' || host.credentialStatus === 'temporarily-unavailable') {
+        openHost(host)
+        return
+      }
+      const name = row.displayName?.trim() || row.repo
+      router.push(
+        `/h/${encodeURIComponent(host.id)}/session/${encodeURIComponent(row.worktreeId)}?name=${encodeURIComponent(name)}`
+      )
+    },
+    [openHost, router]
+  )
+
   const openHostActions = useCallback((host: HostCatalogEntry) => {
     triggerMediumImpact()
     if (host.profile) {
@@ -179,12 +194,12 @@ export function MobileHomeScreen() {
     actionTarget != null && data.hostStates[actionTarget.id] === 'connected'
 
   const {
+    projectsPlatform,
+    selectProjectsPlatform,
     partitionedCatalog,
-    partitionedProfiles,
     teamsBadge,
     soloBotsBadge,
-    winBadge,
-    macBadge,
+    projectsBadge,
     resolveHomeFab
   } = zone
 
@@ -198,8 +213,21 @@ export function MobileHomeScreen() {
     newAutomationLabel: t('home.automationsTab.newAutomation', 'New automation'),
     onOpenAutomations: (hostId) => openMobileAutomations(hostId, { create: true })
   })
-  // The floating button covers the last row unless the list can scroll past it.
   const contentBottom = spacing.xl + (fab ? FAB_CLEARANCE : 0)
+  const fourZoneTrailing = (
+    <>
+      <MobileHomeTabHeaderButton
+        icon={LayoutGrid}
+        accessibilityLabel="切换经典视图"
+        onPress={toggleLayoutMode}
+      />
+      <MobileHomeTabHeaderButton
+        icon={Settings}
+        accessibilityLabel={t('common.settings', 'Settings')}
+        onPress={openSettings}
+      />
+    </>
+  )
 
   return (
     // Agent rows swipe; no gesture root sits above Home.
@@ -218,30 +246,17 @@ export function MobileHomeScreen() {
                     onOpenSettings={openSettings}
                     onToggleClassicLayout={toggleLayoutMode}
                   />
-                ) : id === 'win' ? (
-                  <MobileHomePlatformHostsTab
-                    platform="win"
+                ) : id === 'projects' ? (
+                  <MobileHomeProjectsTab
+                    platform={projectsPlatform}
+                    onSelectPlatform={selectProjectsPlatform}
                     data={data}
-                    hosts={partitionedCatalog.winHosts}
-                    profiles={partitionedProfiles.winHosts}
+                    winHosts={partitionedCatalog.winHosts}
+                    macHosts={partitionedCatalog.macHosts}
                     bottomInset={contentBottom}
-                    agentHandlers={agentActions.handlers}
                     onOpenHost={openHost}
                     onOpenHostActions={openHostActions}
-                    onPairDesktop={pairDesktop}
-                    onOpenSettings={openSettings}
-                    onToggleClassicLayout={toggleLayoutMode}
-                  />
-                ) : id === 'mac' ? (
-                  <MobileHomePlatformHostsTab
-                    platform="mac"
-                    data={data}
-                    hosts={partitionedCatalog.macHosts}
-                    profiles={partitionedProfiles.macHosts}
-                    bottomInset={contentBottom}
-                    agentHandlers={agentActions.handlers}
-                    onOpenHost={openHost}
-                    onOpenHostActions={openHostActions}
+                    onOpenWorktree={openWorktree}
                     onPairDesktop={pairDesktop}
                     onOpenSettings={openSettings}
                     onToggleClassicLayout={toggleLayoutMode}
@@ -270,18 +285,7 @@ export function MobileHomeScreen() {
                     titleOverride={layoutMode === 'four-zone' ? '单独 Bot' : undefined}
                     trailingExtra={
                       layoutMode === 'four-zone' ? (
-                        <>
-                          <MobileHomeTabHeaderButton
-                            icon={LayoutGrid}
-                            accessibilityLabel="切换经典视图"
-                            onPress={toggleLayoutMode}
-                          />
-                          <MobileHomeTabHeaderButton
-                            icon={Settings}
-                            accessibilityLabel={t('common.settings', 'Settings')}
-                            onPress={openSettings}
-                          />
-                        </>
+                        fourZoneTrailing
                       ) : (
                         <MobileHomeTabHeaderButton
                           icon={LayoutGrid}
@@ -306,6 +310,7 @@ export function MobileHomeScreen() {
                     stats={data.stats}
                     bottomInset={contentBottom}
                     onOpenAccounts={openMobileAccounts}
+                    trailingExtra={layoutMode === 'four-zone' ? fourZoneTrailing : undefined}
                   />
                 ) : (
                   <MobileHomeAutomationsTab
@@ -337,8 +342,7 @@ export function MobileHomeScreen() {
             agentsBadge={data.agentsNeedingYou.length}
             botsBadge={layoutMode === 'four-zone' ? soloBotsBadge : data.bots.needsYou}
             teamsBadge={teamsBadge}
-            winBadge={winBadge}
-            macBadge={macBadge}
+            projectsBadge={projectsBadge}
             onSelect={selectTab}
           />
         </View>
