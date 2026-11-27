@@ -1,0 +1,20 @@
+apply plugin: 'com.android.library'
+
+group = 'expo.modules.orcareservedregions'
+version = '0.0.1'
+
+def expoModulesCorePlugin = new File(project(':expo-modules-core').projectDir.absolutePath, 'ExpoModulesCorePlugin.gradle')
+apply from: expoModulesCorePlugin
+applyKotlinExpoModulesCorePlugin()
+useCoreDependencies()
+useExpoPublishing()
+useDefaultAndroidSdkVersions()
+
+android {
+  namespace 'expo.modules.orcareservedregions'
+}
+
+dependencies {
+  implementation 'androidx.window:window:1.3.0'
+  implementation 'androidx.window:window-java:1.3.0'
+}

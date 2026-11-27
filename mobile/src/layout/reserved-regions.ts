@@ -3,7 +3,13 @@ import { OrcaReservedRegions, type ReservedRegions } from '../../modules/orca-re
 
 const NO_REGIONS: ReservedRegions = { divisions: [], occlusions: [] }
 
-let current = NO_REGIONS
+let current: ReservedRegions = (() => {
+  try {
+    return OrcaReservedRegions?.getCurrentRegions?.() ?? NO_REGIONS
+  } catch {
+    return NO_REGIONS
+  }
+})()
 const listeners = new Set<() => void>()
 let observing = false
 

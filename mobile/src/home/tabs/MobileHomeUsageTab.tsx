@@ -54,7 +54,7 @@ export function MobileHomeUsageTab(props: {
 }) {
   const t = useMobileTranslation()
   useMobileColorScheme()
-  const { isWideLayout, contentMaxWidth } = useResponsiveLayout()
+  const { isWideLayout } = useResponsiveLayout()
   const { host, pick } = useHomeTabHost(props.hosts, props.connectedHosts)
   const { client } = useHostClient(host?.id)
   const connected = host != null && props.hostStates[host.id] === 'connected'
@@ -101,7 +101,7 @@ export function MobileHomeUsageTab(props: {
         contentContainerStyle={[
           styles.content,
           { paddingBottom: spacing.xl + props.bottomInset },
-          isWideLayout && { maxWidth: contentMaxWidth, width: '100%', alignSelf: 'center' }
+          isWideLayout && styles.contentWide
         ]}
       >
         {host ? (
@@ -120,6 +120,7 @@ export function MobileHomeUsageTab(props: {
             connected={connected}
             snapshot={props.accountsByHost[host.id] ?? null}
             first={!props.stats}
+            twoColumn={isWideLayout}
             onOpenAccounts={props.onOpenAccounts}
           />
         ) : (
@@ -137,6 +138,7 @@ function HostUsage(props: {
   connected: boolean
   snapshot: AccountsSnapshot | null
   first: boolean
+  twoColumn: boolean
   onOpenAccounts: (hostId: string) => void
 }) {
   const t = useMobileTranslation()
@@ -176,12 +178,13 @@ function HostUsage(props: {
     <Animated.View
       key={props.host.id}
       entering={reducedMotion || props.host.id === initialHostId ? undefined : FadeIn.duration(180)}
+      style={props.twoColumn ? styles.sectionsGrid : undefined}
     >
       {sections.map((section, index) => (
-        <View key={section.provider}>
+        <View key={section.provider} style={props.twoColumn ? styles.sectionGridCell : undefined}>
           <MobileHomeSectionHeading
             title={PROVIDER_TITLES[section.provider]}
-            first={props.first && index === 0}
+            first={props.twoColumn ? true : props.first && index === 0}
             aside={
               section.updatedAt == null
                 ? undefined

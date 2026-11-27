@@ -48,6 +48,9 @@ import { MobileHomeTabBar } from './tabs/MobileHomeTabBar'
 import { MobileHomeUsageTab } from './tabs/MobileHomeUsageTab'
 import { FOUR_ZONE_HOME_TABS, type FourZoneHomeTabId, type HomeTabId } from './tabs/home-tabs'
 import { MobileTabOrderSheet } from './tabs/MobileTabOrderSheet'
+import { useFoldablePosture } from '../layout/foldable-posture'
+import { MobileFoldableWorkbench } from './foldable/MobileFoldableWorkbench'
+import type { FoldableStageTarget } from './foldable/foldable-stage-types'
 
 // The floating button's height plus its gap above the tab bar.
 const FAB_CLEARANCE = 56 + spacing.lg
@@ -69,6 +72,8 @@ export function MobileHomeScreen() {
   const [actionTarget, setActionTarget] = useState<HostProfile | null>(null)
   const [confirmRemove, setConfirmRemove] = useState<{ id: string; name: string } | null>(null)
   const [reorderTabTarget, setReorderTabTarget] = useState<FourZoneHomeTabId | null>(null)
+  const [stageTarget, setStageTarget] = useState<FoldableStageTarget | null>(null)
+  const foldable = useFoldablePosture()
   const zone = useMobileFourZoneHome(data)
   const {
     layoutMode, fourZoneTabOrder, reorderFourZoneTabs, resetFourZoneTabOrder,
@@ -223,53 +228,55 @@ export function MobileHomeScreen() {
     </>
   )
 
+  const useFoldableShell =
+    layoutMode === 'four-zone' && (foldable.isUnfoldedWorkbench || foldable.isTabletop)
+
   return (
     // Agent rows swipe; no gesture root sits above Home.
     <GestureHandlerRootView style={styles.fill}>
       <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.fill}>
+        {useFoldableShell ? (
+          <MobileFoldableWorkbench
+            foldable={foldable}
+            data={data}
+            fourZoneTabOrder={fourZoneTabOrder}
+            activeTab={tab}
+            projectsPlatform={projectsPlatform}
+            winHosts={partitionedCatalog.winHosts}
+            macHosts={partitionedCatalog.macHosts}
+            teamsBadge={teamsBadge}
+            soloBotsBadge={soloBotsBadge}
+            projectsBadge={projectsBadge}
+            canCreateBot={canCreateBot}
+            stageTarget={stageTarget}
+            onChangeStageTarget={setStageTarget}
+            clientOf={clientOf}
+            onSelectTab={selectTab}
+            onLongPressTab={(target) => {
+              triggerMediumImpact()
+              setReorderTabTarget(target)
+            }}
+            onSelectProjectsPlatform={selectProjectsPlatform}
+            onOpenHost={openHost}
+            onOpenHostActions={openHostActions}
+            onOpenNewBot={openNewBot}
+            onOpenAccounts={openMobileAccounts}
+            onPairDesktop={pairDesktop}
+            onOpenSettings={openSettings}
+            onToggleClassicLayout={toggleLayoutMode}
+          />
+        ) : (
+          <>
+            <View style={styles.fill}>
           {activeTabs.map((id) =>
             visitedTabs.has(id) ? (
               <View key={id} style={id === tab ? styles.fill : styles.hidden}>
                 {id === 'teams' ? (
-                  <MobileHomeTeamsTab
-                    data={data}
-                    bottomInset={contentBottom}
-                    onOpenBot={openBot}
-                    onPairDesktop={pairDesktop}
-                    onOpenSettings={openSettings}
-                    onToggleClassicLayout={toggleLayoutMode}
-                  />
+                  <MobileHomeTeamsTab data={data} bottomInset={contentBottom} onOpenBot={openBot} onPairDesktop={pairDesktop} onOpenSettings={openSettings} onToggleClassicLayout={toggleLayoutMode} />
                 ) : id === 'projects' ? (
-                  <MobileHomeProjectsTab
-                    platform={projectsPlatform}
-                    onSelectPlatform={selectProjectsPlatform}
-                    data={data}
-                    winHosts={partitionedCatalog.winHosts}
-                    macHosts={partitionedCatalog.macHosts}
-                    bottomInset={contentBottom}
-                    onOpenHost={openHost}
-                    onOpenHostActions={openHostActions}
-                    onOpenWorktree={openWorktree}
-                    onOpenAgent={agentActions.handlers.onOpen}
-                    onPairDesktop={pairDesktop}
-                    onOpenSettings={openSettings}
-                    onToggleClassicLayout={toggleLayoutMode}
-                  />
+                  <MobileHomeProjectsTab platform={projectsPlatform} onSelectPlatform={selectProjectsPlatform} data={data} winHosts={partitionedCatalog.winHosts} macHosts={partitionedCatalog.macHosts} bottomInset={contentBottom} onOpenHost={openHost} onOpenHostActions={openHostActions} onOpenWorktree={openWorktree} onOpenAgent={agentActions.handlers.onOpen} onPairDesktop={pairDesktop} onOpenSettings={openSettings} onToggleClassicLayout={toggleLayoutMode} />
                 ) : id === 'feed' ? (
-                  <MobileHomeFeedTab
-                    data={data}
-                    bottomInset={contentBottom}
-                    agentHandlers={agentActions.handlers}
-                    onSeeAllAgents={seeAllAgents}
-                    onOpenBot={openBot}
-                    onSeeAllBots={seeAllBots}
-                    onOpenHost={openHost}
-                    onOpenHostActions={openHostActions}
-                    onPairDesktop={pairDesktop}
-                    onOpenTasks={openTasks}
-                    onOpenSettings={openSettings}
-                  />
+                  <MobileHomeFeedTab data={data} bottomInset={contentBottom} agentHandlers={agentActions.handlers} onSeeAllAgents={seeAllAgents} onOpenBot={openBot} onSeeAllBots={seeAllBots} onOpenHost={openHost} onOpenHostActions={openHostActions} onPairDesktop={pairDesktop} onOpenTasks={openTasks} onOpenSettings={openSettings} />
                 ) : id === 'bots' ? (
                   <MobileHomeBotsTab
                     data={data}
@@ -278,44 +285,14 @@ export function MobileHomeScreen() {
                     onOpenBot={openBot}
                     rowKind={layoutMode === 'four-zone' ? 'bot' : 'all'}
                     titleOverride={layoutMode === 'four-zone' ? '单独 Bot' : undefined}
-                    trailingExtra={
-                      layoutMode === 'four-zone' ? (
-                        fourZoneTrailing
-                      ) : (
-                        <MobileHomeTabHeaderButton
-                          icon={LayoutGrid}
-                          accessibilityLabel="切回四区视图"
-                          onPress={toggleLayoutMode}
-                        />
-                      )
-                    }
+                    trailingExtra={layoutMode === 'four-zone' ? fourZoneTrailing : <MobileHomeTabHeaderButton icon={LayoutGrid} accessibilityLabel="切回四区视图" onPress={toggleLayoutMode} />}
                   />
                 ) : id === 'agents' ? (
-                  <MobileHomeAgentsTab
-                    data={data}
-                    bottomInset={contentBottom}
-                    handlers={agentActions.handlers}
-                  />
+                  <MobileHomeAgentsTab data={data} bottomInset={contentBottom} handlers={agentActions.handlers} />
                 ) : id === 'usage' ? (
-                  <MobileHomeUsageTab
-                    hosts={data.sortedHosts}
-                    connectedHosts={data.connectedHosts}
-                    hostStates={data.hostStates}
-                    accountsByHost={data.accountsByHost}
-                    stats={data.stats}
-                    bottomInset={contentBottom}
-                    onOpenAccounts={openMobileAccounts}
-                    trailingExtra={layoutMode === 'four-zone' ? fourZoneTrailing : undefined}
-                  />
+                  <MobileHomeUsageTab hosts={data.sortedHosts} connectedHosts={data.connectedHosts} hostStates={data.hostStates} accountsByHost={data.accountsByHost} stats={data.stats} bottomInset={contentBottom} onOpenAccounts={openMobileAccounts} trailingExtra={layoutMode === 'four-zone' ? fourZoneTrailing : undefined} />
                 ) : (
-                  <MobileHomeAutomationsTab
-                    hosts={data.sortedHosts}
-                    connectedHosts={data.connectedHosts}
-                    hostStates={data.hostStates}
-                    bottomInset={contentBottom}
-                    onOpenAutomations={(hostId) => openMobileAutomations(hostId)}
-                    onHostChange={setAutomationsHostId}
-                  />
+                  <MobileHomeAutomationsTab hosts={data.sortedHosts} connectedHosts={data.connectedHosts} hostStates={data.hostStates} bottomInset={contentBottom} onOpenAutomations={(hostId) => openMobileAutomations(hostId)} onHostChange={setAutomationsHostId} />
                 )}
               </View>
             ) : null
@@ -339,18 +316,20 @@ export function MobileHomeScreen() {
             teamsBadge={teamsBadge}
             projectsBadge={projectsBadge}
             onSelect={selectTab}
-            onLongPressTab={
-              layoutMode === 'four-zone'
-                ? (target: HomeTabId) => {
-                    if ((FOUR_ZONE_HOME_TABS as readonly string[]).includes(target)) {
-                      triggerMediumImpact()
-                      setReorderTabTarget(target as FourZoneHomeTabId)
-                    }
-                  }
-                : undefined
-            }
-          />
-        </View>
+                onLongPressTab={
+                  layoutMode === 'four-zone'
+                    ? (target: HomeTabId) => {
+                        if ((FOUR_ZONE_HOME_TABS as readonly string[]).includes(target)) {
+                          triggerMediumImpact()
+                          setReorderTabTarget(target as FourZoneHomeTabId)
+                        }
+                      }
+                    : undefined
+                }
+              />
+            </View>
+          </>
+        )}
         {agentActions.sheet}
         <MobileTabOrderSheet
           target={reorderTabTarget}

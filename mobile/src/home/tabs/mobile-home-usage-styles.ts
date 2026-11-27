@@ -9,6 +9,17 @@ const METER_GAP = 10
 export const mobileHomeUsageStyles = themedStyleSheet(() => ({
   screen: { flex: 1 },
   content: { paddingHorizontal: spacing.lg },
+  contentWide: { maxWidth: 960, width: '100%', alignSelf: 'center' },
+  sectionsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.md,
+    alignItems: 'flex-start'
+  },
+  sectionGridCell: {
+    flex: 1,
+    minWidth: 280
+  },
   loading: { alignItems: 'center', paddingVertical: 60 },
   card: { paddingVertical: 14, paddingHorizontal: spacing.lg, backgroundColor: colors.bgPanel },
   cardSeparated: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.borderSubtle },

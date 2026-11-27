@@ -8,13 +8,20 @@ export type WindowSafeArea = {
   insets: { top: number; right: number; bottom: number; left: number }
 }
 
-/** The window's active reserved regions: a partially folded iPhone Duo's fold, and its camera. */
+export type FoldPostureState = 'flat' | 'half-opened' | 'none'
+export type FoldHingeOrientation = 'vertical' | 'horizontal' | 'none'
+
+/** The window's active reserved regions: a fold's crease/hinge, posture, and camera occlusions. */
 export type ReservedRegions = {
   divisions: ReservedRect[]
   hasFoldDivision?: boolean
   occlusions: ReservedRect[]
   keyboardInset?: number
   windowSafeArea?: WindowSafeArea
+  /** Android Jetpack WindowManager foldable posture; absent on iOS/web. */
+  foldPosture?: FoldPostureState
+  foldOrientation?: FoldHingeOrientation
+  foldSeparating?: boolean
 }
 
 type ReservedRegionsEvents = {
@@ -22,11 +29,12 @@ type ReservedRegionsEvents = {
   onChange: (regions: ReservedRegions) => void
 }
 
-declare class OrcaReservedRegionsModule extends NativeModule<ReservedRegionsEvents> {}
+declare class OrcaReservedRegionsModule extends NativeModule<ReservedRegionsEvents> {
+  getCurrentRegions?: () => ReservedRegions | null
+}
 
 /**
- * Null on Android, the web and in a binary built before the module existed. A binary built with
- * an SDK older than iOS 27.1, or running on an older iOS, never sends `onChange`.
+ * Native fold/reserved-region observer (iOS 27.1+ reserved regions & Android Jetpack WindowManager).
  */
 export const OrcaReservedRegions =
   requireOptionalNativeModule<OrcaReservedRegionsModule>('OrcaReservedRegions')

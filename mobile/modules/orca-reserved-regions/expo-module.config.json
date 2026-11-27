@@ -1,6 +1,9 @@
 {
-  "platforms": ["apple"],
+  "platforms": ["apple", "android"],
   "apple": {
     "modules": ["OrcaReservedRegionsModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.orcareservedregions.OrcaReservedRegionsModule"]
   }
 }
