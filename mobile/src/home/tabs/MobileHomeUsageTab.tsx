@@ -10,10 +10,12 @@ import Animated, {
 import { formatUsageBarValue, usageBarFill } from '../../accounts/usage/UsageBar'
 import { useUsagePercentageDisplay } from '../../accounts/usage/usage-percentage-display-preference'
 import {
+  getOtherUsageProviders,
   getUsageBarState,
   getWindowResetLabel,
   type ProviderKey
 } from '../../accounts/usage/usage-selectors'
+import { getProviderDisplayName } from '../../../../src/shared/agent-usage/display/usage-provider-windows'
 import type { AccountsSnapshot } from '../../accounts/accounts-snapshot'
 import { ClaudeIcon, OpenAIIcon } from '../../components/icons/AgentIcons'
 import { useNow } from '../../hooks/use-now'
@@ -36,6 +38,7 @@ import { HOME_EASE_OUT } from './home-tabs'
 import { selectHomeUsageSections, type HomeUsageCard } from './home-usage-cards'
 import { MobileHomeHostPill, useHomeTabHost } from './MobileHomeHostPill'
 import { MobileHomeTabHeader, MobileHomeTabHeaderButton } from './MobileHomeTabHeader'
+import { MobileHomeOtherUsageCard } from './MobileHomeOtherUsageCard'
 import { mobileHomeUsageStyles as styles } from './mobile-home-usage-styles'
 import { getManagedAccountPrimaryLabel } from '../../../../src/shared/agent-accounts/managed-account-display-names'
 
@@ -166,14 +169,24 @@ function HostUsage(props: {
       </View>
     )
   }
-  const sections = selectHomeUsageSections(props.snapshot)
-  if (sections.length === 0) {
+  const snapshot = props.snapshot
+  const sections = selectHomeUsageSections(snapshot)
+  const otherProviders = getOtherUsageProviders(snapshot)
+  if (sections.length === 0 && otherProviders.length === 0) {
     return (
       <UsageEmpty
         message={t('home.usage.addAccounts', 'Add accounts from desktop Settings → Accounts.')}
       />
     )
   }
+  const formatUpdatedAside = (updatedAt: number | null) =>
+    updatedAt == null
+      ? undefined
+      : now - updatedAt < 60_000
+        ? t('home.usage.updatedJustNow', 'Updated just now')
+        : t('home.usage.updatedAgo', 'Updated {{time}} ago', {
+            time: formatTimeAgo(updatedAt, now)
+          })
   return (
     <Animated.View
       key={props.host.id}
@@ -185,15 +198,7 @@ function HostUsage(props: {
           <MobileHomeSectionHeading
             title={PROVIDER_TITLES[section.provider]}
             first={props.twoColumn ? true : props.first && index === 0}
-            aside={
-              section.updatedAt == null
-                ? undefined
-                : now - section.updatedAt < 60_000
-                  ? t('home.usage.updatedJustNow', 'Updated just now')
-                  : t('home.usage.updatedAgo', 'Updated {{time}} ago', {
-                      time: formatTimeAgo(section.updatedAt, now)
-                    })
-            }
+            aside={formatUpdatedAside(section.updatedAt)}
           />
           <View style={homeListStyles.group}>
             {section.cards.map((card, cardIndex) => (
@@ -207,6 +212,27 @@ function HostUsage(props: {
                 onPress={() => props.onOpenAccounts(props.host.id)}
               />
             ))}
+          </View>
+        </View>
+      ))}
+      {otherProviders.map((limits, index) => (
+        <View
+          key={`other:${limits.provider}`}
+          style={props.twoColumn ? styles.sectionGridCell : undefined}
+        >
+          <MobileHomeSectionHeading
+            title={getProviderDisplayName(limits.provider)}
+            first={props.twoColumn ? true : props.first && sections.length === 0 && index === 0}
+            aside={formatUpdatedAside(limits.updatedAt > 0 ? limits.updatedAt : null)}
+          />
+          <View style={homeListStyles.group}>
+            <MobileHomeOtherUsageCard
+              snapshot={snapshot}
+              limits={limits}
+              now={now}
+              reducedMotion={reducedMotion}
+              onPress={() => props.onOpenAccounts(props.host.id)}
+            />
           </View>
         </View>
       ))}
