@@ -1,5 +1,23 @@
-import React from 'react'
-import { Bot, Laptop, Monitor, Users } from 'lucide-react'
+import React, { useState } from 'react'
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpToLine,
+  Bot,
+  Laptop,
+  Layers,
+  Monitor,
+  RotateCcw,
+  Users
+} from 'lucide-react'
+import { cn } from '@/lib/class-names'
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger
+} from '@/components/ui/context-menu'
 import {
   APP_RAIL_ICON_SIZE,
   APP_RAIL_ICON_STROKE_WIDTH,
@@ -8,19 +26,30 @@ import {
   type AppRailItemId
 } from './AppRailButton'
 import { WORKSPACE_LIST_REGION_ID } from './app-rail-layout'
-import type { SidebarZoneMode } from '@/components/sidebar/four-zone/sidebar-four-zone-model'
+import {
+  DEFAULT_SIDEBAR_ZONE_ORDER,
+  moveSidebarZoneByOffset,
+  moveSidebarZoneInOrder,
+  moveSidebarZoneToFirst,
+  normalizeSidebarZoneOrder,
+  type SidebarZoneMode
+} from '@/components/sidebar/four-zone/sidebar-four-zone-model'
+import {
+  resetSidebarZoneOrder,
+  setSidebarZoneOrder
+} from '@/components/sidebar/four-zone/sidebar-zone-store'
 
-export type ZoneRailItemId = 'zone-teams' | 'zone-bots' | 'zone-win' | 'zone-mac'
+export type ZoneRailItemId = 'zone-teams' | 'zone-bots' | 'zone-win' | 'zone-mac' | 'workspaces'
 
 type ZoneRailItemSpec = {
   itemId: ZoneRailItemId
-  zone: Exclude<SidebarZoneMode, 'all'>
+  zone: SidebarZoneMode
   label: string
   renderIcon: () => React.ReactNode
 }
 
-const ALL_ZONE_RAIL_ITEMS: readonly ZoneRailItemSpec[] = [
-  {
+const ZONE_RAIL_SPEC_BY_MODE: Record<SidebarZoneMode, ZoneRailItemSpec> = {
+  teams: {
     itemId: 'zone-teams',
     zone: 'teams',
     label: 'Bot 团队',
@@ -28,7 +57,7 @@ const ALL_ZONE_RAIL_ITEMS: readonly ZoneRailItemSpec[] = [
       <Users size={APP_RAIL_ICON_SIZE} strokeWidth={APP_RAIL_ICON_STROKE_WIDTH} aria-hidden />
     )
   },
-  {
+  bots: {
     itemId: 'zone-bots',
     zone: 'bots',
     label: '单独 Bot',
@@ -36,7 +65,7 @@ const ALL_ZONE_RAIL_ITEMS: readonly ZoneRailItemSpec[] = [
       <Bot size={APP_RAIL_ICON_SIZE} strokeWidth={APP_RAIL_ICON_STROKE_WIDTH} aria-hidden />
     )
   },
-  {
+  win: {
     itemId: 'zone-win',
     zone: 'win',
     label: 'Win 主机',
@@ -44,25 +73,47 @@ const ALL_ZONE_RAIL_ITEMS: readonly ZoneRailItemSpec[] = [
       <Monitor size={APP_RAIL_ICON_SIZE} strokeWidth={APP_RAIL_ICON_STROKE_WIDTH} aria-hidden />
     )
   },
-  {
+  mac: {
     itemId: 'zone-mac',
     zone: 'mac',
     label: 'Mac 主机',
     renderIcon: () => (
       <Laptop size={APP_RAIL_ICON_SIZE} strokeWidth={APP_RAIL_ICON_STROKE_WIDTH} aria-hidden />
     )
+  },
+  all: {
+    itemId: 'workspaces',
+    zone: 'all',
+    label: '全部（经典）',
+    renderIcon: () => (
+      <Layers size={APP_RAIL_ICON_SIZE} strokeWidth={APP_RAIL_ICON_STROKE_WIDTH} aria-hidden />
+    )
   }
-]
+}
 
-export function getZoneRailItemIds(botsEnabled: boolean): readonly ZoneRailItemId[] {
-  return (botsEnabled ? ALL_ZONE_RAIL_ITEMS : ALL_ZONE_RAIL_ITEMS.slice(2)).map(
-    (item) => item.itemId
-  )
+export function getOrderedZoneRailItems(
+  botsEnabled: boolean,
+  zoneOrder: readonly SidebarZoneMode[] = DEFAULT_SIDEBAR_ZONE_ORDER
+): ZoneRailItemSpec[] {
+  const normalized = normalizeSidebarZoneOrder(zoneOrder)
+  const visibleModes = botsEnabled
+    ? normalized
+    : normalized.filter((mode) => mode !== 'teams' && mode !== 'bots')
+  return visibleModes.map((mode) => ZONE_RAIL_SPEC_BY_MODE[mode])
+}
+
+export function getZoneRailItemIds(
+  botsEnabled: boolean,
+  zoneOrder: readonly SidebarZoneMode[] = DEFAULT_SIDEBAR_ZONE_ORDER
+): readonly ZoneRailItemId[] {
+  return getOrderedZoneRailItems(botsEnabled, zoneOrder).map((item) => item.itemId)
 }
 
 export function AppRailZoneButtons({
   botsEnabled,
+  zoneOrder,
   workspacesActive,
+  workspacesLabel,
   zoneMode,
   listShowsWorkspaces,
   listVisible,
@@ -71,34 +122,151 @@ export function AppRailZoneButtons({
   onSelectZone
 }: {
   botsEnabled: boolean
+  zoneOrder: readonly SidebarZoneMode[]
   workspacesActive: boolean
+  workspacesLabel: string
   zoneMode: SidebarZoneMode
   listShowsWorkspaces: boolean
   listVisible: boolean
   listRegionPresent: boolean
   tabStopItem: AppRailItemId
-  onSelectZone: (zone: Exclude<SidebarZoneMode, 'all'>) => void
+  onSelectZone: (zone: SidebarZoneMode) => void
 }): React.JSX.Element {
-  const items = botsEnabled ? ALL_ZONE_RAIL_ITEMS : ALL_ZONE_RAIL_ITEMS.slice(2)
+  const [draggingZone, setDraggingZone] = useState<SidebarZoneMode | null>(null)
+  const [dropTargetZone, setDropTargetZone] = useState<SidebarZoneMode | null>(null)
+  const items = getOrderedZoneRailItems(botsEnabled, zoneOrder)
+  const isDefaultOrder = DEFAULT_SIDEBAR_ZONE_ORDER.every(
+    (mode, index) => zoneOrder[index] === mode
+  )
+
   return (
     <>
-      {items.map((item) => {
+      {items.map((item, visibleIndex) => {
         const active = workspacesActive && zoneMode === item.zone
+        const label = item.zone === 'all' ? `${workspacesLabel}（经典全部）` : item.label
+        const isFirstVisible = visibleIndex === 0
+        const isLastVisible = visibleIndex === items.length - 1
+        const showDropIndicator =
+          draggingZone !== null && dropTargetZone === item.zone && draggingZone !== item.zone
+        const dragIndex = draggingZone ? items.findIndex((entry) => entry.zone === draggingZone) : -1
+        const dropBelow = dragIndex !== -1 && dragIndex < visibleIndex
+
         return (
-          <RailItem key={item.itemId} tooltip={item.label}>
-            <AppRailButton
-              itemId={item.itemId}
-              icon={item.renderIcon()}
-              label={item.label}
-              active={active}
-              aria-expanded={active && listShowsWorkspaces ? listVisible : undefined}
-              aria-controls={
-                listShowsWorkspaces && listRegionPresent ? WORKSPACE_LIST_REGION_ID : undefined
-              }
-              tabStop={tabStopItem === item.itemId}
-              onClick={() => onSelectZone(item.zone)}
-            />
-          </RailItem>
+          <ContextMenu key={item.itemId}>
+            <div
+              className="relative flex flex-col items-center"
+              onDragOver={(event) => {
+                if (!draggingZone || draggingZone === item.zone) {
+                  return
+                }
+                event.preventDefault()
+                event.dataTransfer.dropEffect = 'move'
+                if (dropTargetZone !== item.zone) {
+                  setDropTargetZone(item.zone)
+                }
+              }}
+              onDragLeave={() => {
+                if (dropTargetZone === item.zone) {
+                  setDropTargetZone(null)
+                }
+              }}
+              onDrop={(event) => {
+                event.preventDefault()
+                const source = draggingZone
+                setDraggingZone(null)
+                setDropTargetZone(null)
+                if (source && source !== item.zone) {
+                  setSidebarZoneOrder(moveSidebarZoneInOrder(zoneOrder, source, item.zone))
+                }
+              }}
+            >
+              {showDropIndicator && !dropBelow ? (
+                <div
+                  aria-hidden
+                  className="pointer-events-none absolute -top-1.5 h-0.5 w-5 rounded-full bg-primary"
+                />
+              ) : null}
+              <ContextMenuTrigger asChild>
+                <span className="inline-flex">
+                  <RailItem tooltip={`${label}（可拖动或右键排序）`}>
+                    <AppRailButton
+                      itemId={item.itemId}
+                      icon={item.renderIcon()}
+                      label={item.zone === 'all' ? workspacesLabel : item.label}
+                      active={active}
+                      aria-expanded={active && listShowsWorkspaces ? listVisible : undefined}
+                      aria-controls={
+                        listShowsWorkspaces && listRegionPresent
+                          ? WORKSPACE_LIST_REGION_ID
+                          : undefined
+                      }
+                      tabStop={tabStopItem === item.itemId}
+                      draggable
+                      className={cn(draggingZone === item.zone && 'opacity-45')}
+                      onDragStart={(event) => {
+                        setDraggingZone(item.zone)
+                        event.dataTransfer.effectAllowed = 'move'
+                        event.dataTransfer.setData('text/plain', item.zone)
+                      }}
+                      onDragEnd={() => {
+                        setDraggingZone(null)
+                        setDropTargetZone(null)
+                      }}
+                      onClick={() => onSelectZone(item.zone)}
+                    />
+                  </RailItem>
+                </span>
+              </ContextMenuTrigger>
+              {showDropIndicator && dropBelow ? (
+                <div
+                  aria-hidden
+                  className="pointer-events-none absolute -bottom-1.5 h-0.5 w-5 rounded-full bg-primary"
+                />
+              ) : null}
+            </div>
+            <ContextMenuContent className="w-40">
+              <ContextMenuItem
+                disabled={isFirstVisible}
+                onSelect={() => setSidebarZoneOrder(moveSidebarZoneToFirst(zoneOrder, item.zone))}
+              >
+                <ArrowUpToLine className="size-3.5" />
+                放到第一个
+              </ContextMenuItem>
+              <ContextMenuItem
+                disabled={isFirstVisible}
+                onSelect={() => {
+                  const prev = items[visibleIndex - 1]
+                  if (prev) {
+                    setSidebarZoneOrder(moveSidebarZoneInOrder(zoneOrder, item.zone, prev.zone))
+                  } else {
+                    setSidebarZoneOrder(moveSidebarZoneByOffset(zoneOrder, item.zone, -1))
+                  }
+                }}
+              >
+                <ArrowUp className="size-3.5" />
+                上移一位
+              </ContextMenuItem>
+              <ContextMenuItem
+                disabled={isLastVisible}
+                onSelect={() => {
+                  const next = items[visibleIndex + 1]
+                  if (next) {
+                    setSidebarZoneOrder(moveSidebarZoneInOrder(zoneOrder, item.zone, next.zone))
+                  } else {
+                    setSidebarZoneOrder(moveSidebarZoneByOffset(zoneOrder, item.zone, 1))
+                  }
+                }}
+              >
+                <ArrowDown className="size-3.5" />
+                下移一位
+              </ContextMenuItem>
+              <ContextMenuSeparator />
+              <ContextMenuItem disabled={isDefaultOrder} onSelect={() => resetSidebarZoneOrder()}>
+                <RotateCcw className="size-3.5" />
+                恢复默认顺序
+              </ContextMenuItem>
+            </ContextMenuContent>
+          </ContextMenu>
         )
       })}
     </>

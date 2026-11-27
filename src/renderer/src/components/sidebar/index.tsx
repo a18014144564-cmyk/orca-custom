@@ -51,6 +51,7 @@ import { setWorkspaceListRegionPresent } from '@/components/app-rail/workspace-l
 import { WorktreeCardsUpdateNotice } from './workspace-card/template/WorktreeCardsUpdateNotice'
 import { useSidebarFourZone } from './four-zone/sidebar-four-zone'
 import { SidebarZoneSwitcher } from './four-zone/SidebarZoneSwitcher'
+import { SidebarPlatformCodexPane } from './four-zone/SidebarPlatformCodexPane'
 
 // Load the shared Activity badge/list pipeline after the sidebar shell.
 const SidebarAgentsList = lazyWithRetry(() => import('../activity/sidebar/SidebarAgentsList'))
@@ -306,21 +307,29 @@ function Sidebar({
             </>
           )}
           <SidebarProjectsListSlot botsShown={botsShown} collapsed={projectsCollapsed}>
-            <WorktreeList
-              scrollOffsetRef={worktreeScrollOffsetRef}
-              scrollAnchorRef={worktreeScrollAnchorRef}
-              workspaceBoardOpen={workspaceBoardOpen}
-              onWorktreeCardClick={closeWorkspaceBoard}
-              onWorkspaceBoardDragPreviewStart={previewWorkspaceBoardFromDrag}
-              onWorkspaceBoardDragPreviewCommit={solidifyWorkspaceBoardFromDrag}
-              onWorkspaceBoardDragPreviewCancel={cancelWorkspaceBoardDragPreview}
-              projectsCollapseTarget={projectsCollapseTarget}
-              hostIdsOverride={classicMode ? null : hostIdsOverride}
-              emptyStateMessage={zoneEmptyMessage}
-            />
+            {!classicMode && (zoneMode === 'win' || zoneMode === 'mac') ? (
+              <SidebarPlatformCodexPane
+                hostIds={hostIdsOverride ?? []}
+                emptyStateMessage={zoneEmptyMessage}
+                onWorktreeClick={closeWorkspaceBoard}
+              />
+            ) : (
+              <WorktreeList
+                scrollOffsetRef={worktreeScrollOffsetRef}
+                scrollAnchorRef={worktreeScrollAnchorRef}
+                workspaceBoardOpen={workspaceBoardOpen}
+                onWorktreeCardClick={closeWorkspaceBoard}
+                onWorkspaceBoardDragPreviewStart={previewWorkspaceBoardFromDrag}
+                onWorkspaceBoardDragPreviewCommit={solidifyWorkspaceBoardFromDrag}
+                onWorkspaceBoardDragPreviewCancel={cancelWorkspaceBoardDragPreview}
+                projectsCollapseTarget={projectsCollapseTarget}
+                hostIdsOverride={classicMode ? null : hostIdsOverride}
+                emptyStateMessage={zoneEmptyMessage}
+              />
+            )}
           </SidebarProjectsListSlot>
-          {projectsCollapsed ? null : <WslMovedProjectsSection />}
-          {projectsCollapsed ? null : <HiddenProjectsSection />}
+          {projectsCollapsed || !classicMode ? null : <WslMovedProjectsSection />}
+          {projectsCollapsed || !classicMode ? null : <HiddenProjectsSection />}
         </>
       )}
     </React.Fragment>

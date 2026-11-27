@@ -1,11 +1,10 @@
 import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { BookOpen, CalendarClock, Files, Layers, List, Smartphone } from 'lucide-react'
+import { BookOpen, CalendarClock, Files, List, Smartphone } from 'lucide-react'
 import { useAppStore } from '@/store/index'
 import { useTranslate } from '@/i18n/use-translate'
 import { useHelpMenuController } from '@/components/sidebar/chrome/help-menu-controller'
 import { useSetupGuideProgressSnapshot } from '@/components/setup-guide/setup-guide-progress-snapshot'
 import { nextAppRailFocusIndex } from './app-rail-roving-focus'
-import { WORKSPACE_LIST_REGION_ID } from './app-rail-layout'
 import {
   activateWorkspacesRailItem,
   ensureWorkspacesRailListOpen,
@@ -42,6 +41,7 @@ import { useBotsEnabled } from '@/lib/bot-catalog'
 import {
   setSidebarZoneMode,
   useSidebarZoneMode,
+  useSidebarZoneOrder,
   type SidebarZoneMode
 } from '@/components/sidebar/four-zone/sidebar-four-zone'
 
@@ -104,10 +104,15 @@ export function AppRail({
   )
   const botsEnabled = useBotsEnabled()
   const rawZoneMode = useSidebarZoneMode()
+  const zoneOrder = useSidebarZoneOrder()
   const zoneMode: SidebarZoneMode =
     !botsEnabled && (rawZoneMode === 'teams' || rawZoneMode === 'bots') ? 'all' : rawZoneMode
-  const zoneItemIds = getZoneRailItemIds(botsEnabled)
+  const zoneItemIds = getZoneRailItemIds(botsEnabled, zoneOrder)
   const activateZoneRailItem = (targetZone: SidebarZoneMode): void => {
+    if (targetZone === 'all' && zoneMode === 'all') {
+      navigateFromRail(() => activateWorkspacesRailItem(useAppStore))
+      return
+    }
     navigateFromRail(() => {
       if (isWorkspacesRailItemActive(useAppStore.getState()) && zoneMode === targetZone) {
         useAppStore.getState().toggleSidebar()
@@ -119,14 +124,13 @@ export function AppRail({
   }
   // Hidden destinations are left out before partitioning; hidden is never folded.
   const shownDestinations = shownRailDestinationsFromKey(shownDestinationsKey)
-  const partition = partitionAppRail(shownDestinations.length, capacity, zoneItemIds.length + 1)
+  const partition = partitionAppRail(shownDestinations.length, capacity, zoneItemIds.length)
   const railDestinations = shownDestinations.slice(0, partition.shownDestinations)
   const foldedDestinations = shownDestinations.slice(partition.shownDestinations)
   const destinationActive = (id: AppRailDestinationId): boolean => id === currentDestination
 
   const renderedItems: AppRailItemId[] = [
     ...zoneItemIds,
-    'workspaces',
     ...railDestinations,
     partition.more ? 'more' : 'customize',
     'account'
@@ -312,7 +316,9 @@ export function AppRail({
         <div className="flex flex-col items-center gap-2.5">
           <AppRailZoneButtons
             botsEnabled={botsEnabled}
+            zoneOrder={zoneOrder}
             workspacesActive={workspacesActive}
+            workspacesLabel={workspacesLabel}
             zoneMode={zoneMode}
             listShowsWorkspaces={listShowsWorkspaces}
             listVisible={listVisible}
@@ -320,35 +326,6 @@ export function AppRail({
             tabStopItem={tabStopItem}
             onSelectZone={activateZoneRailItem}
           />
-          <RailItem tooltip={`${workspacesLabel}（经典全部）`}>
-            <AppRailButton
-              itemId="workspaces"
-              icon={
-                <Layers
-                  size={APP_RAIL_ICON_SIZE}
-                  strokeWidth={APP_RAIL_ICON_STROKE_WIDTH}
-                  aria-hidden
-                />
-              }
-              label={workspacesLabel}
-              active={workspacesActive && zoneMode === 'all'}
-              // Expansion describes only the content actually in the list column.
-              aria-expanded={
-                workspacesActive && zoneMode === 'all' && listShowsWorkspaces
-                  ? listVisible
-                  : undefined
-              }
-              aria-controls={
-                listShowsWorkspaces && listRegionPresent ? WORKSPACE_LIST_REGION_ID : undefined
-              }
-              tabStop={tabStopItem === 'workspaces'}
-              onClick={() =>
-                zoneMode === 'all'
-                  ? navigateFromRail(() => activateWorkspacesRailItem(useAppStore))
-                  : activateZoneRailItem('all')
-              }
-            />
-          </RailItem>
           <div className="my-0.5 h-px w-4 shrink-0 bg-worktree-sidebar-border/80" aria-hidden />
           {railDestinations.map((id) => (
             <RailItem key={id} tooltip={destinationLabel(id)}>

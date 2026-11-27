@@ -14,7 +14,15 @@ import {
 import { setSidebarZoneMode, useSidebarZoneMode } from './sidebar-zone-store'
 
 export * from './sidebar-four-zone-model'
-export { getSidebarZoneMode, setSidebarZoneMode, useSidebarZoneMode } from './sidebar-zone-store'
+export {
+  getSidebarZoneMode,
+  getSidebarZoneOrder,
+  resetSidebarZoneOrder,
+  setSidebarZoneMode,
+  setSidebarZoneOrder,
+  useSidebarZoneMode,
+  useSidebarZoneOrder
+} from './sidebar-zone-store'
 
 export function useSidebarFourZone(botsEnabled: boolean) {
   const zoneMode = useSidebarZoneMode()

@@ -7,9 +7,121 @@ export type SidebarZoneMode = 'teams' | 'bots' | 'win' | 'mac' | 'all'
 export type HostPlatformBucket = 'win' | 'mac' | 'other'
 
 export const SIDEBAR_ZONE_STORAGE_KEY = 'orca.custom.sidebarZoneMode'
+export const SIDEBAR_ZONE_ORDER_STORAGE_KEY = 'orca.custom.sidebarZoneOrder'
 export const DEFAULT_SIDEBAR_ZONE_MODE: SidebarZoneMode = 'teams'
+export const DEFAULT_SIDEBAR_ZONE_ORDER: readonly SidebarZoneMode[] = [
+  'teams',
+  'bots',
+  'win',
+  'mac',
+  'all'
+]
 
-const VALID_ZONE_MODES: ReadonlySet<string> = new Set(['teams', 'bots', 'win', 'mac', 'all'])
+const VALID_ZONE_MODES: ReadonlySet<string> = new Set(DEFAULT_SIDEBAR_ZONE_ORDER)
+
+export function normalizeSidebarZoneOrder(raw: unknown): SidebarZoneMode[] {
+  const result: SidebarZoneMode[] = []
+  const seen = new Set<SidebarZoneMode>()
+  if (Array.isArray(raw)) {
+    for (const item of raw) {
+      if (typeof item === 'string' && VALID_ZONE_MODES.has(item)) {
+        const mode = item as SidebarZoneMode
+        if (!seen.has(mode)) {
+          seen.add(mode)
+          result.push(mode)
+        }
+      }
+    }
+  }
+  for (const mode of DEFAULT_SIDEBAR_ZONE_ORDER) {
+    if (!seen.has(mode)) {
+      seen.add(mode)
+      result.push(mode)
+    }
+  }
+  return result
+}
+
+export function readStoredSidebarZoneOrder(): SidebarZoneMode[] {
+  if (typeof window === 'undefined') {
+    return [...DEFAULT_SIDEBAR_ZONE_ORDER]
+  }
+  try {
+    const raw = window.localStorage.getItem(SIDEBAR_ZONE_ORDER_STORAGE_KEY)
+    if (raw) {
+      return normalizeSidebarZoneOrder(JSON.parse(raw))
+    }
+  } catch {
+    // Ignore storage read/parse failures in restricted environments.
+  }
+  return [...DEFAULT_SIDEBAR_ZONE_ORDER]
+}
+
+export function writeStoredSidebarZoneOrder(order: readonly SidebarZoneMode[]): void {
+  if (typeof window === 'undefined') {
+    return
+  }
+  try {
+    window.localStorage.setItem(
+      SIDEBAR_ZONE_ORDER_STORAGE_KEY,
+      JSON.stringify(normalizeSidebarZoneOrder(order))
+    )
+  } catch {
+    // Ignore storage write failures.
+  }
+}
+
+export function moveSidebarZoneInOrder(
+  order: readonly SidebarZoneMode[],
+  fromZone: SidebarZoneMode,
+  toZone: SidebarZoneMode
+): SidebarZoneMode[] {
+  const normalized = normalizeSidebarZoneOrder(order)
+  if (fromZone === toZone) {
+    return normalized
+  }
+  const fromIndex = normalized.indexOf(fromZone)
+  const toIndex = normalized.indexOf(toZone)
+  if (fromIndex === -1 || toIndex === -1) {
+    return normalized
+  }
+  const next = [...normalized]
+  const [moved] = next.splice(fromIndex, 1)
+  next.splice(toIndex, 0, moved)
+  return next
+}
+
+export function moveSidebarZoneToFirst(
+  order: readonly SidebarZoneMode[],
+  zone: SidebarZoneMode
+): SidebarZoneMode[] {
+  const normalized = normalizeSidebarZoneOrder(order)
+  const index = normalized.indexOf(zone)
+  if (index <= 0) {
+    return normalized
+  }
+  const next = [...normalized]
+  const [moved] = next.splice(index, 1)
+  next.unshift(moved)
+  return next
+}
+
+export function moveSidebarZoneByOffset(
+  order: readonly SidebarZoneMode[],
+  zone: SidebarZoneMode,
+  delta: -1 | 1
+): SidebarZoneMode[] {
+  const normalized = normalizeSidebarZoneOrder(order)
+  const index = normalized.indexOf(zone)
+  const targetIndex = index + delta
+  if (index === -1 || targetIndex < 0 || targetIndex >= normalized.length) {
+    return normalized
+  }
+  const next = [...normalized]
+  const [moved] = next.splice(index, 1)
+  next.splice(targetIndex, 0, moved)
+  return next
+}
 
 export function readStoredSidebarZoneMode(): SidebarZoneMode {
   if (typeof window === 'undefined') {
@@ -23,7 +135,7 @@ export function readStoredSidebarZoneMode(): SidebarZoneMode {
   } catch {
     // Ignore storage read failures in restricted environments.
   }
-  return DEFAULT_SIDEBAR_ZONE_MODE
+  return readStoredSidebarZoneOrder()[0] ?? DEFAULT_SIDEBAR_ZONE_MODE
 }
 
 export function writeStoredSidebarZoneMode(mode: SidebarZoneMode): void {

@@ -2,7 +2,7 @@ import React from 'react'
 import { Bot, Laptop, LayoutGrid, Monitor, Users } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/class-names'
-import type { SidebarZoneMode } from './sidebar-four-zone'
+import { useSidebarZoneOrder, type SidebarZoneMode } from './sidebar-four-zone'
 
 type SidebarZoneSwitcherProps = {
   mode: SidebarZoneMode
@@ -32,8 +32,9 @@ export const SidebarZoneSwitcher = React.memo(function SidebarZoneSwitcher({
   winHostCount,
   macHostCount
 }: SidebarZoneSwitcherProps): React.JSX.Element {
-  const zones: ZoneItem[] = [
-    {
+  const zoneOrder = useSidebarZoneOrder()
+  const zoneById: Record<Exclude<SidebarZoneMode, 'all'>, ZoneItem> = {
+    teams: {
       id: 'teams',
       label: '团队',
       tooltip: 'Bot 团队群聊列表',
@@ -41,7 +42,7 @@ export const SidebarZoneSwitcher = React.memo(function SidebarZoneSwitcher({
       count: teamCount,
       disabled: !botsEnabled
     },
-    {
+    bots: {
       id: 'bots',
       label: 'Bot',
       tooltip: '单独 Bot 列表',
@@ -49,21 +50,24 @@ export const SidebarZoneSwitcher = React.memo(function SidebarZoneSwitcher({
       count: botCount,
       disabled: !botsEnabled
     },
-    {
+    win: {
       id: 'win',
       label: 'Win',
       tooltip: `Windows 主机工作区（${winHostCount} 台主机）`,
       icon: Monitor,
       count: winHostCount
     },
-    {
+    mac: {
       id: 'mac',
       label: 'Mac',
       tooltip: `Mac 主机工作区（${macHostCount} 台主机）`,
       icon: Laptop,
       count: macHostCount
     }
-  ]
+  }
+  const zones: ZoneItem[] = zoneOrder
+    .filter((id): id is Exclude<SidebarZoneMode, 'all'> => id !== 'all')
+    .map((id) => zoneById[id])
 
   const isClassic = mode === 'all'
 
