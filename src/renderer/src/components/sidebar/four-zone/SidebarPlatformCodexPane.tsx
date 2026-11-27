@@ -25,6 +25,11 @@ import { collectExcludedBotSessionIds } from './sidebar-codex-bot-filter'
 import { useSidebarHostScopeOptions } from '../worktree-list/controls/use-sidebar-host-scope-options'
 import { groupCodexProjectsByHost, resolveCodexZoneHostMeta } from './sidebar-codex-host-groups'
 import { buildCodexSidebarModel, type CodexProjectRow, type CodexRecentRow } from './sidebar-codex-model'
+import {
+  moveCodexThreadToProject,
+  resetCodexThreadProject,
+  useCodexThreadProjectMap
+} from './sidebar-codex-thread-moves'
 import { CodexProjectRowItem, CodexRecentRowItem } from './SidebarPlatformCodexRows'
 
 const INITIAL_RECENT_LIMIT = 24
@@ -77,6 +82,7 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
   const [onlyActive, setOnlyActive] = useState(false)
   const [showAllRecent, setShowAllRecent] = useState(false)
   const [selectedPaneKey, setSelectedPaneKey] = useState<string | null>(null)
+  const threadProjectOverrides = useCodexThreadProjectMap()
 
   const { hostOptions } = useSidebarHostScopeOptions()
   const hostMeta = useMemo(
@@ -122,7 +128,8 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
         defaultHostId,
         activeWorktreeId,
         selectedPaneKey,
-        onlyActiveRecent: onlyActive
+        onlyActiveRecent: onlyActive,
+        threadProjectOverrides
       }),
     [
       repos,
@@ -140,7 +147,8 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
       defaultHostId,
       activeWorktreeId,
       selectedPaneKey,
-      onlyActive
+      onlyActive,
+      threadProjectOverrides
     ]
   )
 
@@ -236,6 +244,23 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
     ? model.recentItems
     : model.recentItems.slice(0, INITIAL_RECENT_LIMIT)
   const hiddenRecentCount = model.recentItems.length - visibleRecentItems.length
+  const renderProjectRow = (project: CodexProjectRow) => (
+    <CodexProjectRowItem
+      key={project.key}
+      project={project}
+      allProjects={model.projects}
+      movedThreadKeys={threadProjectOverrides}
+      isExpanded={!collapsedProjects.has(project.key)}
+      onlyActive={onlyActive}
+      onToggleExpand={toggleProjectCollapsed}
+      onActivateWorktree={handleActivateWorktree}
+      onSelectThread={handleSelectThread}
+      onCreateWorkspace={handleProjectCreate}
+      onRenameProject={handleRenameProject}
+      onMoveThread={moveCodexThreadToProject}
+      onResetThreadMove={resetCodexThreadProject}
+    />
+  )
 
   if (model.projects.length === 0 && model.totalRecentCount === 0) {
     return (
@@ -352,19 +377,7 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
                   </button>
                   {!hostCollapsed ? (
                     <div className="ml-2.5 flex flex-col gap-0.5 border-l border-worktree-sidebar-border/70 pl-2">
-                      {projects.map((project) => (
-                        <CodexProjectRowItem
-                          key={project.key}
-                          project={project}
-                          isExpanded={!collapsedProjects.has(project.key)}
-                          onlyActive={onlyActive}
-                          onToggleExpand={toggleProjectCollapsed}
-                          onActivateWorktree={handleActivateWorktree}
-                          onSelectThread={handleSelectThread}
-                          onCreateWorkspace={handleProjectCreate}
-                          onRenameProject={handleRenameProject}
-                        />
-                      ))}
+                      {projects.map(renderProjectRow)}
                     </div>
                   ) : null}
                 </div>
@@ -372,21 +385,7 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
             })}
           </div>
         ) : (
-          <div className="flex flex-col gap-0.5">
-            {visibleProjects.map((project) => (
-              <CodexProjectRowItem
-                key={project.key}
-                project={project}
-                isExpanded={!collapsedProjects.has(project.key)}
-                onlyActive={onlyActive}
-                onToggleExpand={toggleProjectCollapsed}
-                onActivateWorktree={handleActivateWorktree}
-                onSelectThread={handleSelectThread}
-                onCreateWorkspace={handleProjectCreate}
-                onRenameProject={handleRenameProject}
-              />
-            ))}
-          </div>
+          <div className="flex flex-col gap-0.5">{visibleProjects.map(renderProjectRow)}</div>
         )
       ) : visibleRecentItems.length === 0 ? (
         <p className="px-2 py-4 text-xs text-muted-foreground/75">

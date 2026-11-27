@@ -57,6 +57,7 @@ import { useBotsSidebarReveal } from './bots-sidebar-reveal'
 import { BotsRevealProvider } from './bots-sidebar-reveal-context'
 import { SidebarBotsEmptyState } from './SidebarBotsEmptyState'
 import { BotSidebarVirtualRows } from './BotSidebarVirtualRows'
+import { BotSidebarHostGroups } from './BotSidebarHostGroups'
 
 // The + menu's rows only: 28px tall (a 20px line in the item's own 4px padding), roomier than other menus.
 const BOT_MENU_ROW = 'flex min-h-5 items-center gap-2'
@@ -377,52 +378,61 @@ export function SidebarBotsSection({
               ) : (
                 <SidebarBotsEmptyState onNewBot={openNewBot} />
               )
-            ) : collapsed ? null : (
-              <>
-                <BotSidebarVirtualRows
-                  entries={entries}
-                  listRef={listRef}
-                  draggingId={drag.state.draggingGroupId}
-                  revealId={reveal.request?.target.entryKey}
-                  renderEntry={(entry, index) => {
-                    const entryDrag: BotSidebarEntryDrag | undefined = draggable
-                      ? {
-                          index,
-                          dragging: drag.state.draggingGroupId === entry.id,
-                          settling: drag.state.draggingGroupId !== null,
-                          offset: drag.state.previewOffsetsById?.get(entry.id) ?? 0,
-                          onPointerDown: (event) => drag.onHandlePointerDown(event, entry.id)
-                        }
-                      : undefined
-                    return entry.kind === 'group' ? (
-                      <BotSidebarDragFrame id={entry.id} drag={entryDrag}>
-                        <BotGroupRow
-                          group={entry.group}
-                          home={entry.home}
-                          members={botGroupMemberBots(entry.group, bots)}
-                          isActive={activeGroupId === entry.group.id}
-                          onOpen={onOpenBot}
-                          onManageMembers={() => setEditingGroup(entry.group)}
-                          onDelete={() => void deleteGroup(entry.group)}
-                          dragHandle={draggable}
-                        />
-                      </BotSidebarDragFrame>
-                    ) : (
-                      <BotSidebarEntry
-                        bot={entry.bot}
-                        home={entry.home}
-                        isActive={activeWorkspaceId === folderWorkspaceKey(entry.home.id)}
-                        onOpen={onOpenBot}
-                        drag={entryDrag}
-                      />
-                    )
-                  }}
-                />
-                {drag.state.draggingGroupId !== null && drag.state.dropIndicatorY !== null ? (
-                  <WorktreeSidebarDropIndicator y={drag.state.dropIndicatorY} />
-                ) : null}
-              </>
-            )}
+            ) : collapsed ? null : (() => {
+              const renderBotOrGroupEntry = (entry: (typeof entries)[number], index: number) => {
+                const entryDrag: BotSidebarEntryDrag | undefined = draggable
+                  ? {
+                      index,
+                      dragging: drag.state.draggingGroupId === entry.id,
+                      settling: drag.state.draggingGroupId !== null,
+                      offset: drag.state.previewOffsetsById?.get(entry.id) ?? 0,
+                      onPointerDown: (event) => drag.onHandlePointerDown(event, entry.id)
+                    }
+                  : undefined
+                return entry.kind === 'group' ? (
+                  <BotSidebarDragFrame id={entry.id} drag={entryDrag}>
+                    <BotGroupRow
+                      group={entry.group}
+                      home={entry.home}
+                      members={botGroupMemberBots(entry.group, bots)}
+                      isActive={activeGroupId === entry.group.id}
+                      onOpen={onOpenBot}
+                      onManageMembers={() => setEditingGroup(entry.group)}
+                      onDelete={() => void deleteGroup(entry.group)}
+                      dragHandle={draggable}
+                    />
+                  </BotSidebarDragFrame>
+                ) : (
+                  <BotSidebarEntry
+                    bot={entry.bot}
+                    home={entry.home}
+                    isActive={activeWorkspaceId === folderWorkspaceKey(entry.home.id)}
+                    onOpen={onOpenBot}
+                    drag={entryDrag}
+                  />
+                )
+              }
+              const distinctHosts = new Set(
+                entries.map((entry) => (entry.kind === 'bot' ? entry.bot.hostId : entry.group.hostId))
+              )
+              if (standalone && distinctHosts.size > 1) {
+                return <BotSidebarHostGroups entries={entries} renderEntry={renderBotOrGroupEntry} />
+              }
+              return (
+                <>
+                  <BotSidebarVirtualRows
+                    entries={entries}
+                    listRef={listRef}
+                    draggingId={drag.state.draggingGroupId}
+                    revealId={reveal.request?.target.entryKey}
+                    renderEntry={renderBotOrGroupEntry}
+                  />
+                  {drag.state.draggingGroupId !== null && drag.state.dropIndicatorY !== null ? (
+                    <WorktreeSidebarDropIndicator y={drag.state.dropIndicatorY} />
+                  ) : null}
+                </>
+              )
+            })()}
           </div>
         </BotsRevealProvider>
       </BotSidebarSearchHost>

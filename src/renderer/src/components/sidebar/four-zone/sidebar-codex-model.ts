@@ -18,6 +18,7 @@ import {
   isExcludedBotOrTeamThread,
   isExcludedBotSessionTabId
 } from './sidebar-codex-bot-filter'
+import { applyCodexThreadProjectOverrides } from './sidebar-codex-thread-moves'
 import {
   CODEX_TONE_PRIORITY,
   buildFolderRepoMark,
@@ -63,6 +64,7 @@ export function buildCodexSidebarModel(args: {
   activeWorktreeId: string | null
   selectedPaneKey: string | null
   onlyActiveRecent: boolean
+  threadProjectOverrides?: Readonly<Record<string, string>>
 }): CodexSidebarModel {
   const botOwnedWorktreeIdentities = args.botOwnedWorktreeIdentities ?? EMPTY_STRING_SET
   const excludedBotSessionIds = args.excludedBotSessionIds ?? EMPTY_STRING_SET
@@ -301,6 +303,8 @@ export function buildCodexSidebarModel(args: {
       )
     }
   }
+
+  applyCodexThreadProjectOverrides(projects, args.threadProjectOverrides)
 
   projects.sort(
     (a, b) => Number(b.isPinned) - Number(a.isPinned) || b.lastActivityAt - a.lastActivityAt || b.addedAt - a.addedAt || a.name.localeCompare(b.name)
