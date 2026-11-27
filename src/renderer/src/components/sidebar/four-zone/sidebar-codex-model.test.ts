@@ -275,6 +275,93 @@ describe('buildCodexSidebarModel', () => {
     expect(filtered.recentItems.map((item) => item.title)).toEqual(['运行中任务'])
   })
 
+  it('excludes bot team member chats, orchestration workers, and bot-owned worktrees from Win/Mac zones', () => {
+    const repo = makeRepo({ id: 'r-fs', displayName: 'fengshen-github', executionHostId: winHost })
+    const wtMain = makeWorktree({
+      id: 'wt-main',
+      repoId: 'r-fs',
+      displayName: 'main',
+      hostId: winHost,
+      lastActivityAt: 3000
+    })
+    const wtBotWorker = makeWorktree({
+      id: 'wt-explore',
+      repoId: 'r-fs',
+      displayName: 'fengshen-github-explore',
+      isMainWorktree: false,
+      hostId: winHost,
+      lastActivityAt: 6000
+    })
+
+    const userThread = makeThread({
+      paneKey: 'tab-user:leaf-1',
+      paneTitle: '正常用户对话',
+      worktree: wtMain,
+      repo,
+      state: 'working',
+      latestTimestamp: 4000
+    })
+    const teamMemberThread = makeThread({
+      paneKey: 'structured-agent-session-bot-group-member-1:bot-group-member-1',
+      paneTitle: '团队群聊成员回复',
+      worktree: wtMain,
+      repo,
+      state: 'working',
+      latestTimestamp: 8000
+    })
+    const workerThread: AgentPaneThread = {
+      ...makeThread({
+        paneKey: 'tab-worker:leaf-2',
+        paneTitle: '你是风神项目的开发 Worker，负责...',
+        worktree: wtMain,
+        repo,
+        state: 'working',
+        latestTimestamp: 9000
+      }),
+      currentAgentEntry: {
+        orchestration: { taskId: 't1', dispatchId: 'd1' }
+      } as AgentPaneThread['currentAgentEntry']
+    }
+
+    const model = buildCodexSidebarModel({
+      repos: [repo],
+      worktreesByRepo: { 'r-fs': [wtMain, wtBotWorker] },
+      folderWorkspaces: [],
+      botHomeOwners: [],
+      excludedBotSessionIds: new Set(['bot-group-member-1']),
+      worktreeLineageById: {
+        'wt-explore': {
+          worktreeId: 'wt-explore',
+          worktreeInstanceId: 'inst-1',
+          parentWorktreeId: 'folder:bot-1',
+          parentWorktreeInstanceId: 'inst-0',
+          origin: 'orchestration',
+          capture: { source: 'orchestration-context', confidence: 'explicit' },
+          createdAt: 5000
+        }
+      },
+      allThreads: [userThread, teamMemberThread, workerThread],
+      tabsByWorktree: {
+        'wt-main': [
+          { id: 'tab-user' },
+          { id: 'structured-agent-session-bot-group-member-1' }
+        ],
+        'wt-explore': [{ id: 'tab-worker' }]
+      },
+      browserTabsByWorktree: {},
+      hostIds: [winHost],
+      defaultHostId: winHost,
+      activeWorktreeId: 'wt-main',
+      selectedPaneKey: null,
+      onlyActiveRecent: false
+    })
+
+    expect(model.projects).toHaveLength(1)
+    expect(model.projects[0].worktrees.map((wt) => wt.id)).toEqual(['wt-main'])
+    expect(model.projects[0].openTabCount).toBe(1)
+    expect(model.recentItems.map((item) => item.title)).toEqual(['正常用户对话'])
+  })
+
   it('formats concise Chinese/short relative timestamps', () => {
     const now = 1_700_000_000_000
     expect(formatCodexRelativeTime(now - 10_000, now)).toBe('刚刚')

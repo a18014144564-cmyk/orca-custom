@@ -1,10 +1,12 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { ChevronDown, ChevronRight, Plus, SlidersHorizontal, SquarePen } from 'lucide-react'
 import { useAppStore } from '@/store'
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import {
   selectFolderWorkspaces,
   selectWorktreesByRepo
 } from '@/store/workspaces/catalog/workspace-record-fields'
+import { selectSidebarChildrenByParentIdentity } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import { cn } from '@/lib/class-names'
 import { useBots, useBotsEnabled } from '@/lib/bot-catalog'
 import { useBotGroups } from '@/lib/bot-group-list'
@@ -13,14 +15,19 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useAllAgentPaneThreads } from '@/components/activity/threads/use-agent-pane-threads'
 import { createActivityThreadActions } from '@/components/activity/thread-list/activity-thread-actions'
 import { openHeaderCreateComposer } from '../worktree-list/rows/header-create-workspace-target'
+import { getBotHomes, getBotListedWorktreeIdentities } from '../../../../../shared/bots/bot-homes'
+import type { Worktree } from '../../../../../shared/worktree/types'
 import {
   getSettingsFocusedExecutionHostId,
   type ExecutionHostId
 } from '../../../../../shared/execution-host/execution-host'
+import { collectExcludedBotSessionIds } from './sidebar-codex-bot-filter'
 import { buildCodexSidebarModel, type CodexProjectRow, type CodexRecentRow } from './sidebar-codex-model'
 import { CodexProjectRowItem, CodexRecentRowItem } from './SidebarPlatformCodexRows'
 
 const INITIAL_RECENT_LIMIT = 18
+const NO_CHILDREN: ReadonlyMap<string, readonly Worktree[]> = new Map()
+const EMPTY_IDENTITIES: ReadonlySet<string> = new Set()
 
 type SidebarPlatformCodexPaneProps = {
   hostIds: readonly ExecutionHostId[]
@@ -36,6 +43,7 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
   const repos = useAppStore((s) => s.repos)
   const worktreesByRepo = useAppStore(selectWorktreesByRepo)
   const folderWorkspaces = useAppStore(selectFolderWorkspaces)
+  const worktreeLineageById = useAppStore((s) => s.worktreeLineageById)
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const browserTabsByWorktree = useAppStore((s) => s.browserTabsByWorktree)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
@@ -57,6 +65,23 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
 
   const defaultHostId = getSettingsFocusedExecutionHostId(settings)
   const botHomeOwners = useMemo(() => [...bots, ...botGroups], [bots, botGroups])
+  const childrenByParent = useAppStoreWithHostStatuses((s, statuses) =>
+    botHomeOwners.length === 0 ? NO_CHILDREN : selectSidebarChildrenByParentIdentity(s, statuses)
+  )
+  const botOwnedWorktreeIdentities = useMemo(
+    () =>
+      botHomeOwners.length === 0
+        ? EMPTY_IDENTITIES
+        : getBotListedWorktreeIdentities(
+            getBotHomes(botHomeOwners, folderWorkspaces).map(({ home }) => home),
+            childrenByParent
+          ),
+    [botHomeOwners, folderWorkspaces, childrenByParent]
+  )
+  const excludedBotSessionIds = useMemo(
+    () => collectExcludedBotSessionIds(bots, botGroups),
+    [bots, botGroups]
+  )
 
   const model = useMemo(
     () =>
@@ -65,6 +90,9 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
         worktreesByRepo,
         folderWorkspaces,
         botHomeOwners,
+        botOwnedWorktreeIdentities,
+        excludedBotSessionIds,
+        worktreeLineageById,
         allThreads,
         tabsByWorktree,
         browserTabsByWorktree,
@@ -79,6 +107,9 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
       worktreesByRepo,
       folderWorkspaces,
       botHomeOwners,
+      botOwnedWorktreeIdentities,
+      excludedBotSessionIds,
+      worktreeLineageById,
       allThreads,
       tabsByWorktree,
       browserTabsByWorktree,

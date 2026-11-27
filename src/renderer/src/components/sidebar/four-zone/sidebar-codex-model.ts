@@ -1,5 +1,6 @@
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
+import type { WorktreeLineage } from '../../../../../shared/worktree/lineage-types'
 import type { FolderWorkspace } from '../../../../../shared/folder-workspaces/folder-workspace-types'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../../../../shared/repository/appearance/repo-badge-color'
 import { isHome, type BotHomeOwner } from '../../../../../shared/bots/bot-homes'
@@ -13,25 +14,38 @@ import {
 import type { RepoMarkRepo } from '@/components/repo/RepoMark'
 import type { AgentPaneThread } from '@/components/activity/threads/activity-thread-types'
 import {
+  isBotOrOrchestrationWorktree,
+  isExcludedBotOrTeamThread,
+  isExcludedBotSessionTabId
+} from './sidebar-codex-bot-filter'
+import {
   CODEX_TONE_PRIORITY,
   buildFolderRepoMark,
   higherCodexTone,
+  makeCodexFallbackRecentRow,
   mapAgentStateToCodexTone,
   type CodexActivityTone,
   type CodexProjectRow,
   type CodexProjectWorktreeItem,
   type CodexRecentRow,
-  type CodexSidebarModel
+  type CodexSidebarModel,
+  type CodexTabLike
 } from './sidebar-codex-types'
 
 export * from './sidebar-codex-types'
 
+const EMPTY_STRING_SET: ReadonlySet<string> = new Set()
+
 function countOpenTabs(
   worktreeId: string,
-  tabsByWorktree: Readonly<Record<string, readonly unknown[] | undefined>>,
-  browserTabsByWorktree: Readonly<Record<string, readonly unknown[] | undefined>>
+  tabsByWorktree: Readonly<Record<string, readonly CodexTabLike[] | undefined>>,
+  browserTabsByWorktree: Readonly<Record<string, readonly unknown[] | undefined>>,
+  excludedBotSessionIds: ReadonlySet<string>
 ): number {
-  return (tabsByWorktree[worktreeId]?.length ?? 0) + (browserTabsByWorktree[worktreeId]?.length ?? 0)
+  const terminalTabs = (tabsByWorktree[worktreeId] ?? []).filter(
+    (tab) => !isExcludedBotSessionTabId(tab?.id, excludedBotSessionIds)
+  ).length
+  return terminalTabs + (browserTabsByWorktree[worktreeId]?.length ?? 0)
 }
 
 export function buildCodexSidebarModel(args: {
@@ -39,8 +53,11 @@ export function buildCodexSidebarModel(args: {
   worktreesByRepo: Readonly<Record<string, readonly Worktree[] | undefined>>
   folderWorkspaces: readonly FolderWorkspace[]
   botHomeOwners: readonly BotHomeOwner[]
+  botOwnedWorktreeIdentities?: ReadonlySet<string>
+  excludedBotSessionIds?: ReadonlySet<string>
+  worktreeLineageById?: Readonly<Record<string, WorktreeLineage | undefined>>
   allThreads: readonly AgentPaneThread[]
-  tabsByWorktree: Readonly<Record<string, readonly unknown[] | undefined>>
+  tabsByWorktree: Readonly<Record<string, readonly CodexTabLike[] | undefined>>
   browserTabsByWorktree: Readonly<Record<string, readonly unknown[] | undefined>>
   hostIds: readonly ExecutionHostId[]
   defaultHostId: ExecutionHostId
@@ -48,6 +65,8 @@ export function buildCodexSidebarModel(args: {
   selectedPaneKey: string | null
   onlyActiveRecent: boolean
 }): CodexSidebarModel {
+  const botOwnedWorktreeIdentities = args.botOwnedWorktreeIdentities ?? EMPTY_STRING_SET
+  const excludedBotSessionIds = args.excludedBotSessionIds ?? EMPTY_STRING_SET
   const hostIdSet = new Set<ExecutionHostId>(args.hostIds)
   if (hostIdSet.size === 0) {
     return { projects: [], recentItems: [], totalRecentCount: 0 }
@@ -61,10 +80,7 @@ export function buildCodexSidebarModel(args: {
       botHomeWorktreeIds.add(folderWorkspaceKey(folder.id))
       continue
     }
-    if (folder.isArchived || folder.orcadRetained) {
-      continue
-    }
-    if (!hostIdSet.has(getFolderWorkspaceWorktreeHostId(folder))) {
+    if (folder.isArchived || folder.orcadRetained || !hostIdSet.has(getFolderWorkspaceWorktreeHostId(folder))) {
       continue
     }
     visibleFolders.push(folder)
@@ -79,7 +95,7 @@ export function buildCodexSidebarModel(args: {
 
   for (const thread of args.allThreads) {
     const wtId = thread.worktree.id
-    if (wtId === FLOATING_TERMINAL_WORKTREE_ID || botHomeWorktreeIds.has(wtId)) {
+    if (wtId === FLOATING_TERMINAL_WORKTREE_ID) {
       continue
     }
     const repo = thread.repo ?? repoById.get(thread.worktree.repoId) ?? null
@@ -87,7 +103,15 @@ export function buildCodexSidebarModel(args: {
       continue
     }
     const hostId = getWorktreeExecutionHostId(thread.worktree, repo ?? undefined, args.defaultHostId)
-    if (!hostIdSet.has(hostId)) {
+    if (
+      !hostIdSet.has(hostId) ||
+      isExcludedBotOrTeamThread(thread, hostId, {
+        botHomeWorktreeIds,
+        botOwnedWorktreeIdentities,
+        excludedBotSessionIds,
+        worktreeLineageById: args.worktreeLineageById
+      })
+    ) {
       continue
     }
 
@@ -108,11 +132,10 @@ export function buildCodexSidebarModel(args: {
         executionHostId: hostId,
         connectionId: null
       }
-    const title = thread.paneTitle.trim() || thread.worktree.displayName.trim() || markRepo.displayName
     allRecentRows.push({
       key: `thread:${thread.paneKey}`,
       kind: 'thread',
-      title,
+      title: thread.paneTitle.trim() || thread.worktree.displayName.trim() || markRepo.displayName,
       projectName: markRepo.displayName,
       worktreeId: wtId,
       hostId,
@@ -134,22 +157,24 @@ export function buildCodexSidebarModel(args: {
     if (repo.hiddenAt || repo.orcadRetained) {
       continue
     }
-    const matchingWorktrees = (args.worktreesByRepo[repo.id] ?? []).filter(
-      (wt) => !wt.isArchived && hostIdSet.has(getWorktreeExecutionHostId(wt, repo, args.defaultHostId))
-    )
+    const matchingWorktrees = (args.worktreesByRepo[repo.id] ?? []).filter((wt) => {
+      if (wt.isArchived) {
+        return false
+      }
+      const hostId = getWorktreeExecutionHostId(wt, repo, args.defaultHostId)
+      return (
+        hostIdSet.has(hostId) &&
+        !isBotOrOrchestrationWorktree(wt, hostId, botOwnedWorktreeIdentities, args.worktreeLineageById)
+      )
+    })
     if (matchingWorktrees.length === 0) {
       continue
     }
 
     const worktreeItems: CodexProjectWorktreeItem[] = matchingWorktrees.map((wt) => {
       const hostId = getWorktreeExecutionHostId(wt, repo, args.defaultHostId)
-      const openTabCount = countOpenTabs(wt.id, args.tabsByWorktree, args.browserTabsByWorktree)
+      const openTabCount = countOpenTabs(wt.id, args.tabsByWorktree, args.browserTabsByWorktree, excludedBotSessionIds)
       const threadTone = toneByWorktreeId.get(wt.id) ?? 'idle'
-      const statusTone = threadTone !== 'idle' ? threadTone : wt.isUnread ? 'active' : 'idle'
-      const lastActivityAt = Math.max(
-        wt.lastActivityAt ?? 0,
-        latestThreadAtByWorktreeId.get(wt.id) ?? 0
-      )
       const branch = (wt.branch || '').replace(/^refs\/heads\//, '')
       return {
         id: wt.id,
@@ -160,8 +185,8 @@ export function buildCodexSidebarModel(args: {
         isActive: args.activeWorktreeId === wt.id,
         isPinned: wt.isPinned,
         openTabCount,
-        statusTone,
-        lastActivityAt
+        statusTone: threadTone !== 'idle' ? threadTone : wt.isUnread ? 'active' : 'idle',
+        lastActivityAt: Math.max(wt.lastActivityAt ?? 0, latestThreadAtByWorktreeId.get(wt.id) ?? 0)
       }
     })
 
@@ -185,10 +210,7 @@ export function buildCodexSidebarModel(args: {
       openTabCount: worktreeItems.reduce((sum, item) => sum + item.openTabCount, 0),
       isActive: worktreeItems.some((item) => item.isActive),
       isPinned: worktreeItems.some((item) => item.isPinned),
-      statusTone: worktreeItems.reduce<CodexActivityTone>(
-        (acc, item) => higherCodexTone(acc, item.statusTone),
-        'idle'
-      ),
+      statusTone: worktreeItems.reduce<CodexActivityTone>((acc, item) => higherCodexTone(acc, item.statusTone), 'idle'),
       lastActivityAt: worktreeItems.reduce((max, item) => Math.max(max, item.lastActivityAt), 0),
       addedAt: repo.addedAt
     })
@@ -197,23 +219,19 @@ export function buildCodexSidebarModel(args: {
       if (worktreeIdsWithThread.has(item.id) || (item.openTabCount === 0 && item.lastActivityAt <= 0 && !item.isActive)) {
         continue
       }
-      allRecentRows.push({
-        key: `worktree:${item.id}`,
-        kind: 'worktree',
-        title:
-          item.label === repo.displayName && item.branch
-            ? `${repo.displayName} · ${item.branch}`
-            : item.label,
-        projectName: repo.displayName,
-        worktreeId: item.id,
-        hostId: item.hostId,
-        markRepo: repo,
-        statusTone: item.isActive && item.statusTone === 'idle' ? 'active' : item.statusTone,
-        isActive: item.isActive,
-        isUnread: item.statusTone === 'active',
-        timestamp: item.lastActivityAt,
-        thread: null
-      })
+      allRecentRows.push(
+        makeCodexFallbackRecentRow({
+          title: item.label === repo.displayName && item.branch ? `${repo.displayName} · ${item.branch}` : item.label,
+          projectName: repo.displayName,
+          worktreeId: item.id,
+          hostId: item.hostId,
+          markRepo: repo,
+          statusTone: item.statusTone,
+          isActive: item.isActive,
+          isUnread: item.statusTone === 'active',
+          timestamp: item.lastActivityAt
+        })
+      )
     }
   }
 
@@ -221,7 +239,7 @@ export function buildCodexSidebarModel(args: {
     const wtId = folderWorkspaceKey(folder.id)
     const hostId = getFolderWorkspaceWorktreeHostId(folder)
     const markRepo = folderMarkByWorktreeId.get(wtId) ?? buildFolderRepoMark(folder)
-    const openTabCount = countOpenTabs(wtId, args.tabsByWorktree, args.browserTabsByWorktree)
+    const openTabCount = countOpenTabs(wtId, args.tabsByWorktree, args.browserTabsByWorktree, excludedBotSessionIds)
     const threadTone = toneByWorktreeId.get(wtId) ?? 'idle'
     const statusTone = threadTone !== 'idle' ? threadTone : folder.isUnread ? 'active' : 'idle'
     const lastActivityAt = Math.max(folder.lastActivityAt ?? 0, latestThreadAtByWorktreeId.get(wtId) ?? 0)
@@ -256,20 +274,19 @@ export function buildCodexSidebarModel(args: {
     })
 
     if (!worktreeIdsWithThread.has(wtId) && (openTabCount > 0 || lastActivityAt > 0 || isActive)) {
-      allRecentRows.push({
-        key: `worktree:${wtId}`,
-        kind: 'worktree',
-        title: folder.name,
-        projectName: folder.name,
-        worktreeId: wtId,
-        hostId,
-        markRepo,
-        statusTone: isActive && statusTone === 'idle' ? 'active' : statusTone,
-        isActive,
-        isUnread: folder.isUnread,
-        timestamp: lastActivityAt,
-        thread: null
-      })
+      allRecentRows.push(
+        makeCodexFallbackRecentRow({
+          title: folder.name,
+          projectName: folder.name,
+          worktreeId: wtId,
+          hostId,
+          markRepo,
+          statusTone,
+          isActive,
+          isUnread: folder.isUnread,
+          timestamp: lastActivityAt
+        })
+      )
     }
   }
 
@@ -289,11 +306,7 @@ export function buildCodexSidebarModel(args: {
 
   const recentItems = args.onlyActiveRecent
     ? allRecentRows.filter(
-        (row) =>
-          row.statusTone === 'working' ||
-          row.statusTone === 'attention' ||
-          row.isUnread ||
-          row.isActive
+        (row) => row.statusTone === 'working' || row.statusTone === 'attention' || row.isUnread || row.isActive
       )
     : allRecentRows
 

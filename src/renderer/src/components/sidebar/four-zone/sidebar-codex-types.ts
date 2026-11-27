@@ -125,3 +125,32 @@ export function formatCodexRelativeTime(timestamp: number, now: number = Date.no
   }
   return `${Math.floor(diffDay / 30)}mo`
 }
+
+export type CodexTabLike = { id?: string }
+
+export function makeCodexFallbackRecentRow(args: {
+  title: string
+  projectName: string
+  worktreeId: string
+  hostId: ExecutionHostId
+  markRepo: RepoMarkRepo
+  statusTone: CodexActivityTone
+  isActive: boolean
+  isUnread: boolean
+  timestamp: number
+}): CodexRecentRow {
+  return {
+    key: `worktree:${args.worktreeId}`,
+    kind: 'worktree',
+    title: args.title,
+    projectName: args.projectName,
+    worktreeId: args.worktreeId,
+    hostId: args.hostId,
+    markRepo: args.markRepo,
+    statusTone: args.isActive && args.statusTone === 'idle' ? 'active' : args.statusTone,
+    isActive: args.isActive,
+    isUnread: args.isUnread,
+    timestamp: args.timestamp,
+    thread: null
+  }
+}
