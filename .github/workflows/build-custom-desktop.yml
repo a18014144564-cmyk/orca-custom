@@ -12,6 +12,9 @@ on:
         type: boolean
         default: true
 
+permissions:
+  contents: write
+
 jobs:
   build-windows:
     if: ${{ inputs.build_windows }}
@@ -70,6 +73,17 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      - name: Publish Windows EXE to GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "desktop-win-${{ steps.meta.outputs.build_tag }}"
+          $exe = (Get-ChildItem dist\*.exe | Select-Object -First 1).FullName
+          $named = "dist\orca-reset-windows-${{ steps.meta.outputs.build_tag }}.exe"
+          Copy-Item $exe $named
+          gh release create $tag $named --title "Windows ${{ steps.meta.outputs.build_tag }}" --notes "Commit: ${{ github.sha }}" --prerelease
+
   build-macos:
     if: ${{ inputs.build_macos }}
     runs-on: macos-15
@@ -123,6 +137,15 @@ jobs:
           name: Orca-Reset-macOS-${{ steps.meta.outputs.build_tag }}
           path: |
             dist/*.dmg
-            dist/*.zip
           if-no-files-found: error
           retention-days: 14
+
+      - name: Publish macOS DMG to GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="desktop-mac-${{ steps.meta.outputs.build_tag }}"
+          DMG=$(ls dist/*.dmg | head -n 1)
+          NAMED="dist/orca-reset-macos-${{ steps.meta.outputs.build_tag }}.dmg"
+          cp "$DMG" "$NAMED"
+          gh release create "$TAG" "$NAMED" --title "macOS ${{ steps.meta.outputs.build_tag }}" --notes "Commit: ${{ github.sha }}" --prerelease

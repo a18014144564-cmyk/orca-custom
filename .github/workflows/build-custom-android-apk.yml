@@ -3,6 +3,9 @@ name: Build Custom Android APK
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-android-apk:
     runs-on: ubuntu-latest
@@ -74,3 +77,14 @@ jobs:
           name: Orca-Reset-Android-${{ steps.meta.outputs.build_tag }}
           path: mobile/orca-reset-android-${{ steps.meta.outputs.build_tag }}.apk
           retention-days: 14
+
+      - name: Publish to GitHub Release (direct APK download)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="android-${{ steps.meta.outputs.build_tag }}"
+          gh release create "$TAG" \
+            "mobile/orca-reset-android-${{ steps.meta.outputs.build_tag }}.apk" \
+            --title "Android APK ${{ steps.meta.outputs.build_tag }}" \
+            --notes "Commit: ${{ github.sha }} | Version: ${{ steps.meta.outputs.version_name }} (code ${{ steps.meta.outputs.version_code }})" \
+            --prerelease

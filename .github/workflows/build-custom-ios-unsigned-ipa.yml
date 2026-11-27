@@ -8,6 +8,9 @@ on:
         required: false
         default: 'com.stably.orca.mobile.reset'
 
+permissions:
+  contents: write
+
 jobs:
   build-unsigned-ipa:
     runs-on: macos-26
@@ -93,3 +96,14 @@ jobs:
           name: Orca-Reset-iOS-${{ steps.meta.outputs.build_tag }}
           path: mobile/orca-reset-ios-${{ steps.meta.outputs.build_tag }}.ipa
           retention-days: 14
+
+      - name: Publish iOS IPA to GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="ios-${{ steps.meta.outputs.build_tag }}"
+          gh release create "$TAG" \
+            "mobile/orca-reset-ios-${{ steps.meta.outputs.build_tag }}.ipa" \
+            --title "iOS IPA ${{ steps.meta.outputs.build_tag }}" \
+            --notes "Commit: ${{ github.sha }} | Build: ${{ steps.meta.outputs.version_code }}" \
+            --prerelease
