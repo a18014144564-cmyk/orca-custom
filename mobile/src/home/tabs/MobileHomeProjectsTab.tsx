@@ -29,11 +29,15 @@ import {
 import {
   collectBotHomeWorktreeIds,
   resolvePlatformConnectionHealth,
-  type MobileProjectsPlatform,
-  type PlatformConnectionHealth
+  type MobileProjectsPlatform
 } from './mobile-four-zone'
 import { mobileHomeProjectsStyles as styles } from './mobile-home-projects-styles'
-import { MobileCodexProjectRowView, MobileCodexRecentRowView } from './MobileHomeProjectsRows'
+import {
+  MobileCodexHostGroupView,
+  MobileCodexProjectRowView,
+  MobileCodexRecentRowView,
+  PlatformSegmentButton
+} from './MobileHomeProjectsRows'
 import { MobileHomeTabEmpty } from './MobileHomeTabEmpty'
 import { MobileHomeTabHeader, MobileHomeTabHeaderButton } from './MobileHomeTabHeader'
 
@@ -73,6 +77,7 @@ export function MobileHomeProjectsTab(props: {
 
   const [viewMode, setViewMode] = useState<ViewMode>('tree')
   const [collapsedProjects, setCollapsedProjects] = useState<ReadonlySet<string>>(() => new Set())
+  const [collapsedHosts, setCollapsedHosts] = useState<ReadonlySet<string>>(() => new Set())
   const [onlyActive, setOnlyActive] = useState(false)
   const [showAllRecent, setShowAllRecent] = useState(false)
 
@@ -107,12 +112,24 @@ export function MobileHomeProjectsTab(props: {
   const currentConnecting = currentHosts.some((host) => data.hostStates[host.id] === 'connecting')
 
   const visibleProjects = useMemo(
-    () =>
-      onlyActive
-        ? currentModel.projects.filter(projectHasLiveActivity)
-        : currentModel.projects,
+    () => (onlyActive ? currentModel.projects.filter(projectHasLiveActivity) : currentModel.projects),
     [currentModel.projects, onlyActive]
   )
+  const hostProjectGroups = useMemo(() => {
+    if (!multiHost) { return null }
+    const byHost = new Map<string, { host: HostCatalogEntry; projects: MobileCodexProjectRow[] }>()
+    for (const host of currentHosts) { byHost.set(host.id, { host, projects: [] }) }
+    for (const project of visibleProjects) { byHost.get(project.host.id)?.projects.push(project) }
+    return [...byHost.values()].filter((group) => group.projects.length > 0)
+  }, [currentHosts, multiHost, visibleProjects])
+
+  const toggleHostCollapsed = useCallback((hostId: string) => {
+    setCollapsedHosts((prev) => {
+      const next = new Set(prev)
+      if (next.has(hostId)) { next.delete(hostId) } else { next.add(hostId) }
+      return next
+    })
+  }, [])
 
   const toggleProjectCollapsed = useCallback((projectKey: string) => {
     setCollapsedProjects((prev) => {
@@ -315,15 +332,35 @@ export function MobileHomeProjectsTab(props: {
         </View>
 
         {viewMode === 'tree' ? (
-          <View style={homeListStyles.group}>
-            {visibleProjects.length === 0 ? (
+          visibleProjects.length === 0 ? (
+            <View style={homeListStyles.group}>
               <Text style={styles.recentEmptyText}>当前没有进行中的项目或对话</Text>
-            ) : (
-              visibleProjects.map((project, index) => (
+            </View>
+          ) : hostProjectGroups ? (
+            <View style={styles.hostGroupsWrap}>
+              {hostProjectGroups.map(({ host, projects }) => (
+                <MobileCodexHostGroupView
+                  key={host.id}
+                  host={host}
+                  online={data.hostStates[host.id] === 'connected'}
+                  projects={projects}
+                  collapsed={collapsedHosts.has(host.id)}
+                  collapsedProjects={collapsedProjects}
+                  onlyActive={onlyActive}
+                  onToggleHost={() => toggleHostCollapsed(host.id)}
+                  onToggleProject={toggleProjectCollapsed}
+                  onOpenWorktree={props.onOpenWorktree}
+                  onSelectThread={handlePressRecent}
+                />
+              ))}
+            </View>
+          ) : (
+            <View style={homeListStyles.group}>
+              {visibleProjects.map((project, index) => (
                 <MobileCodexProjectRowView
                   key={project.key}
                   project={project}
-                  multiHost={multiHost}
+                  multiHost={false}
                   expanded={!collapsedProjects.has(project.key)}
                   onlyActive={onlyActive}
                   separated={index > 0}
@@ -331,9 +368,9 @@ export function MobileHomeProjectsTab(props: {
                   onOpenWorktree={props.onOpenWorktree}
                   onSelectThread={handlePressRecent}
                 />
-              ))
-            )}
-          </View>
+              ))}
+            </View>
+          )
         ) : (
           <View style={homeListStyles.group}>
             {visibleRecent.length === 0 ? (
@@ -377,46 +414,5 @@ export function MobileHomeProjectsTab(props: {
         <View style={styles.swipeArea}>{body}</View>
       </GestureDetector>
     </View>
-  )
-}
-
-function PlatformSegmentButton(props: {
-  label: string
-  count: number
-  health: PlatformConnectionHealth
-  selected: boolean
-  onPress: () => void
-  onLongPress: () => void
-}) {
-  useMobileColorScheme()
-  const dotColor = props.health === 'healthy' ? colors.statusGreen : colors.statusRed
-  return (
-    <Pressable
-      accessibilityRole="tab"
-      accessibilityState={{ selected: props.selected }}
-      accessibilityLabel={`${props.label}，${props.health === 'healthy' ? '已连接' : '连接异常'}${props.count > 0 ? `，${props.count} 个项目` : ''}`}
-      onPress={props.onPress}
-      onLongPress={props.onLongPress}
-      style={({ pressed }) => [
-        styles.segment,
-        props.selected && styles.segmentSelected,
-        pressed && styles.segmentPressed
-      ]}
-    >
-      <View style={[styles.healthDot, { backgroundColor: dotColor }]} />
-      <Text
-        style={[styles.segmentLabel, props.selected && styles.segmentLabelSelected]}
-        numberOfLines={1}
-      >
-        {props.label}
-      </Text>
-      {props.count > 0 ? (
-        <View style={[styles.countPill, props.selected && styles.countPillSelected]}>
-          <Text style={[styles.countText, props.selected && styles.countTextSelected]}>
-            {props.count}
-          </Text>
-        </View>
-      ) : null}
-    </Pressable>
   )
 }

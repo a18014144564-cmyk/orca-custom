@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react'
-import { ChevronDown, ChevronRight, Clock, FolderTree, Plus, SlidersHorizontal } from 'lucide-react'
+import { ChevronDown, ChevronRight, Clock, FolderTree, LayoutList, Plus, SlidersHorizontal } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import {
@@ -35,22 +35,22 @@ type ViewMode = 'tree' | 'recent'
 
 type SidebarPlatformCodexPaneProps = {
   hostIds: readonly ExecutionHostId[]
+  alwaysGroupByHost?: boolean
   emptyStateMessage?: string
   onWorktreeClick?: () => void
+  onSwitchClassicList?: () => void
 }
 
 function projectMatchesActiveFilter(project: CodexProjectRow): boolean {
-  return (
-    project.isActive ||
-    project.statusTone !== 'idle' ||
-    project.threads.some((t) => t.statusTone !== 'idle' || t.isUnread || t.isActive)
-  )
+  return project.isActive || project.statusTone !== 'idle' || project.threads.some((t) => t.statusTone !== 'idle' || t.isUnread || t.isActive)
 }
 
 export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodexPane({
   hostIds,
+  alwaysGroupByHost = false,
   emptyStateMessage,
-  onWorktreeClick
+  onWorktreeClick,
+  onSwitchClassicList
 }: SidebarPlatformCodexPaneProps): React.JSX.Element {
   const repos = useAppStore((s) => s.repos)
   const worktreesByRepo = useAppStore(selectWorktreesByRepo)
@@ -149,9 +149,10 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
     [model.projects, onlyActive]
   )
 
+  const groupByHost = alwaysGroupByHost || hostMeta.multiHost
   const projectHostSections = useMemo(
-    () => (hostMeta.multiHost ? groupCodexProjectsByHost(visibleProjects, hostMeta) : null),
-    [hostMeta, visibleProjects]
+    () => (groupByHost ? groupCodexProjectsByHost(visibleProjects, hostMeta) : null),
+    [groupByHost, hostMeta, visibleProjects]
   )
 
   const toggleHostCollapsed = useCallback((hostId: string) => {
@@ -305,6 +306,21 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
               {onlyActive ? '已筛选：仅进行中（点击显示全部）' : '仅显示进行中的对话'}
             </TooltipContent>
           </Tooltip>
+          {onSwitchClassicList ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  aria-label="切换经典卡片列表"
+                  onClick={onSwitchClassicList}
+                  className="flex size-5 items-center justify-center rounded text-muted-foreground/70 transition-colors hover:bg-worktree-sidebar-foreground/8 hover:text-foreground"
+                >
+                  <LayoutList className="size-3" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={6}>切换经典卡片列表</TooltipContent>
+            </Tooltip>
+          ) : null}
         </div>
       </div>
 
@@ -318,9 +334,7 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
               const dotClass =
                 host.health === 'local' || host.health === 'available'
                   ? 'bg-emerald-500'
-                  : host.health === 'connecting' ||
-                      host.health === 'waking' ||
-                      host.health === 'provisioning'
+                  : host.health === 'connecting' || host.health === 'waking' || host.health === 'provisioning'
                     ? 'bg-amber-500 animate-pulse'
                     : 'bg-muted-foreground/45'
               return (
@@ -328,24 +342,16 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
                   <button
                     type="button"
                     onClick={() => toggleHostCollapsed(host.hostId)}
-                    className="flex h-6 items-center gap-1.5 rounded px-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-worktree-sidebar-foreground/6 hover:text-foreground"
+                    className="flex h-7 items-center gap-1.5 rounded-md px-1.5 text-[12px] font-semibold text-foreground/85 transition-colors hover:bg-worktree-sidebar-foreground/6 hover:text-foreground"
                   >
-                    {hostCollapsed ? (
-                      <ChevronRight className="size-3 shrink-0 opacity-70" />
-                    ) : (
-                      <ChevronDown className="size-3 shrink-0 opacity-70" />
-                    )}
+                    {hostCollapsed ? <ChevronRight className="size-3.5 shrink-0 text-muted-foreground/75" /> : <ChevronDown className="size-3.5 shrink-0 text-muted-foreground/75" />}
                     <span aria-hidden className={cn('size-1.5 shrink-0 rounded-full', dotClass)} />
                     <span className="min-w-0 truncate">{host.label}</span>
-                    <span className="shrink-0 rounded bg-worktree-sidebar-foreground/6 px-1 py-0.5 text-[10px] leading-none text-muted-foreground/85">
-                      {host.tag}
-                    </span>
-                    <span className="ml-auto shrink-0 text-[10px] tabular-nums opacity-60">
-                      {projects.length}
-                    </span>
+                    <span className="shrink-0 rounded bg-worktree-sidebar-foreground/6 px-1 py-0.5 text-[10px] leading-none font-medium text-muted-foreground">{host.tag}</span>
+                    <span className="ml-auto shrink-0 text-[10.5px] font-normal tabular-nums text-muted-foreground/65">{projects.length}</span>
                   </button>
                   {!hostCollapsed ? (
-                    <div className="flex flex-col gap-0.5">
+                    <div className="ml-2.5 flex flex-col gap-0.5 border-l border-worktree-sidebar-border/70 pl-2">
                       {projects.map((project) => (
                         <CodexProjectRowItem
                           key={project.key}

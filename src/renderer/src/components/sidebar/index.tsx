@@ -225,6 +225,18 @@ function Sidebar({
   const { zoneMode, setZoneMode, classifiedHosts, hostIdsOverride, teamCount, botCount } =
     useSidebarFourZone(botsEnabled)
   const classicMode = zoneMode === 'all' || sidebarBody === 'agents'
+  const [legacyClassicList, setLegacyClassicList] = React.useState(false)
+  const useCodexPane =
+    sidebarBody !== 'agents' &&
+    (zoneMode === 'win' || zoneMode === 'mac' || (zoneMode === 'all' && !legacyClassicList))
+  const allZoneHostIds = useMemo(() => {
+    const merged = [
+      ...classifiedHosts.winHostIds,
+      ...classifiedHosts.macHostIds,
+      ...classifiedHosts.otherHostIds
+    ]
+    return merged.length > 0 ? merged : (['local'] as typeof merged)
+  }, [classifiedHosts.macHostIds, classifiedHosts.otherHostIds, classifiedHosts.winHostIds])
   const botsShown = classicMode && sidebarBody !== 'agents' && botsEnabled
   // Projects folds only when Bots is shown, so turning bots off always brings the list back.
   const projectsCollapsed = useAppStore(
@@ -275,7 +287,7 @@ function Sidebar({
         collapsible={botsShown}
         projectsCollapseTarget={setProjectsCollapseTarget}
         titleOverride={zoneTitleOverride}
-        hideWorkspaceOptions={!classicMode && (zoneMode === 'win' || zoneMode === 'mac')}
+        hideWorkspaceOptions={useCodexPane}
       />
       <SeveredTerminalDaemonBanner />
       <StalledTerminalDaemonBanner />
@@ -308,25 +320,42 @@ function Sidebar({
             </>
           )}
           <SidebarProjectsListSlot botsShown={botsShown} collapsed={projectsCollapsed}>
-            {!classicMode && (zoneMode === 'win' || zoneMode === 'mac') ? (
+            {useCodexPane ? (
               <SidebarPlatformCodexPane
-                hostIds={hostIdsOverride ?? []}
+                hostIds={zoneMode === 'all' ? allZoneHostIds : (hostIdsOverride ?? [])}
+                alwaysGroupByHost={zoneMode === 'all'}
                 emptyStateMessage={zoneEmptyMessage}
                 onWorktreeClick={closeWorkspaceBoard}
+                onSwitchClassicList={
+                  zoneMode === 'all' ? () => setLegacyClassicList(true) : undefined
+                }
               />
             ) : (
-              <WorktreeList
-                scrollOffsetRef={worktreeScrollOffsetRef}
-                scrollAnchorRef={worktreeScrollAnchorRef}
-                workspaceBoardOpen={workspaceBoardOpen}
-                onWorktreeCardClick={closeWorkspaceBoard}
-                onWorkspaceBoardDragPreviewStart={previewWorkspaceBoardFromDrag}
-                onWorkspaceBoardDragPreviewCommit={solidifyWorkspaceBoardFromDrag}
-                onWorkspaceBoardDragPreviewCancel={cancelWorkspaceBoardDragPreview}
-                projectsCollapseTarget={projectsCollapseTarget}
-                hostIdsOverride={classicMode ? null : hostIdsOverride}
-                emptyStateMessage={zoneEmptyMessage}
-              />
+              <>
+                {zoneMode === 'all' && legacyClassicList ? (
+                  <div className="flex justify-end px-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setLegacyClassicList(false)}
+                      className="rounded px-1.5 py-0.5 text-[11px] text-muted-foreground transition-colors hover:bg-worktree-sidebar-foreground/8 hover:text-foreground"
+                    >
+                      切回主机缩进树
+                    </button>
+                  </div>
+                ) : null}
+                <WorktreeList
+                  scrollOffsetRef={worktreeScrollOffsetRef}
+                  scrollAnchorRef={worktreeScrollAnchorRef}
+                  workspaceBoardOpen={workspaceBoardOpen}
+                  onWorktreeCardClick={closeWorkspaceBoard}
+                  onWorkspaceBoardDragPreviewStart={previewWorkspaceBoardFromDrag}
+                  onWorkspaceBoardDragPreviewCommit={solidifyWorkspaceBoardFromDrag}
+                  onWorkspaceBoardDragPreviewCancel={cancelWorkspaceBoardDragPreview}
+                  projectsCollapseTarget={projectsCollapseTarget}
+                  hostIdsOverride={classicMode ? null : hostIdsOverride}
+                  emptyStateMessage={zoneEmptyMessage}
+                />
+              </>
             )}
           </SidebarProjectsListSlot>
           {projectsCollapsed || !classicMode ? null : <WslMovedProjectsSection />}

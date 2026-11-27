@@ -265,6 +265,12 @@ export const mobileHomeProjectsStyles = themedStyleSheet(() => ({
     paddingVertical: 10,
     alignItems: 'center'
   },
+  hostGroupsWrap: { gap: spacing.sm },
+  hostGroupHeader: { flexDirection: 'row', alignItems: 'center', gap: 7, minHeight: 38, paddingHorizontal: spacing.md, paddingVertical: 8 },
+  hostDot: { width: 7, height: 7, borderRadius: radii.pill },
+  hostGroupTitle: { flex: 1, fontSize: 13.5, fontWeight: '600', color: colors.textPrimary },
+  hostGroupCount: { fontSize: 12, color: colors.textMuted, fontVariant: ['tabular-nums'] },
+  hostGroupChildren: { marginLeft: 18, borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: colors.borderSubtle, paddingLeft: 4 },
   showMoreText: {
     fontSize: 12.5,
     fontWeight: '500',

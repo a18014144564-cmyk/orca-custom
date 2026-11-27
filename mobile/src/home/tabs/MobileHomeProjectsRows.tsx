@@ -1,4 +1,4 @@
-import { Folder, FolderOpen, GitBranch } from 'lucide-react-native'
+import { ChevronDown, ChevronRight, Folder, FolderOpen, GitBranch } from 'lucide-react-native'
 import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import type { HostCatalogEntry } from '../../host-catalog/host-profile'
@@ -12,6 +12,7 @@ import {
   type MobileCodexRecentRow,
   type MobileCodexTone
 } from './mobile-codex-projects'
+import type { PlatformConnectionHealth } from './mobile-four-zone'
 import { mobileHomeProjectsStyles as styles } from './mobile-home-projects-styles'
 
 const INITIAL_PROJECT_THREADS = 5
@@ -213,5 +214,98 @@ export function MobileCodexRecentRowView(props: {
         ) : null}
       </Pressable>
     </View>
+  )
+}
+
+export function MobileCodexHostGroupView(props: {
+  host: HostCatalogEntry
+  online: boolean
+  projects: readonly MobileCodexProjectRow[]
+  collapsed: boolean
+  collapsedProjects: ReadonlySet<string>
+  onlyActive: boolean
+  onToggleHost: () => void
+  onToggleProject: (projectKey: string) => void
+  onOpenWorktree: (host: HostCatalogEntry, row: Worktree) => void
+  onSelectThread: (item: MobileCodexRecentRow) => void
+}) {
+  useMobileColorScheme()
+  return (
+    <View style={homeListStyles.group}>
+      <Pressable
+        accessibilityRole="button"
+        onPress={props.onToggleHost}
+        style={({ pressed }) => [styles.hostGroupHeader, pressed && styles.rowPressed]}
+      >
+        {props.collapsed ? (
+          <ChevronRight size={14} color={colors.textMuted} />
+        ) : (
+          <ChevronDown size={14} color={colors.textMuted} />
+        )}
+        <View
+          style={[
+            styles.hostDot,
+            { backgroundColor: props.online ? colors.statusGreen : colors.textMuted }
+          ]}
+        />
+        <Text style={styles.hostGroupTitle} numberOfLines={1}>
+          {props.host.name}
+        </Text>
+        <Text style={styles.hostGroupCount}>{props.projects.length}</Text>
+      </Pressable>
+      {!props.collapsed ? (
+        <View style={styles.hostGroupChildren}>
+          {props.projects.map((project, index) => (
+            <MobileCodexProjectRowView
+              key={project.key}
+              project={project}
+              multiHost={false}
+              expanded={!props.collapsedProjects.has(project.key)}
+              onlyActive={props.onlyActive}
+              separated={index > 0}
+              onToggleExpand={() => props.onToggleProject(project.key)}
+              onOpenWorktree={props.onOpenWorktree}
+              onSelectThread={props.onSelectThread}
+            />
+          ))}
+        </View>
+      ) : null}
+    </View>
+  )
+}
+
+export function PlatformSegmentButton(props: {
+  label: string
+  count: number
+  health: PlatformConnectionHealth
+  selected: boolean
+  onPress: () => void
+  onLongPress: () => void
+}) {
+  useMobileColorScheme()
+  const dotColor = props.health === 'healthy' ? colors.statusGreen : colors.statusRed
+  return (
+    <Pressable
+      accessibilityRole="tab"
+      accessibilityState={{ selected: props.selected }}
+      accessibilityLabel={`${props.label}，${props.health === 'healthy' ? '已连接' : '连接异常'}${props.count > 0 ? `，${props.count} 个项目` : ''}`}
+      onPress={props.onPress}
+      onLongPress={props.onLongPress}
+      style={({ pressed }) => [
+        styles.segment,
+        props.selected && styles.segmentSelected,
+        pressed && styles.segmentPressed
+      ]}
+    >
+      <View style={[styles.healthDot, { backgroundColor: dotColor }]} />
+      <Text style={[styles.segmentLabel, props.selected && styles.segmentLabelSelected]} numberOfLines={1}>
+        {props.label}
+      </Text>
+      {props.count > 0 ? (
+        <View style={[styles.countPill, props.selected && styles.countPillSelected]}>
+          <Text style={[styles.countText, props.selected && styles.countTextSelected]}>{props.count}</Text>
+        </View>
+      ) : null}
+    </Pressable>
   )
 }
