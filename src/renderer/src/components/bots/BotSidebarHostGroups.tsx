@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useMemo } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/class-names'
 import { useSidebarHostScopeOptions } from '@/components/sidebar/worktree-list/controls/use-sidebar-host-scope-options'
@@ -6,6 +6,10 @@ import {
   resolveCodexZoneHostMeta,
   type CodexHostGroupInfo
 } from '@/components/sidebar/four-zone/sidebar-codex-host-groups'
+import {
+  toggleCodexBotHostCollapsed,
+  useCodexCollapseState
+} from '@/components/sidebar/four-zone/sidebar-codex-collapse-state'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 
 type HostKeyedEntry = {
@@ -28,7 +32,7 @@ export function BotSidebarHostGroups<Entry extends HostKeyedEntry>({
   renderEntry: (entry: Entry, index: number) => React.ReactNode
 }): React.JSX.Element | null {
   const { hostOptions } = useSidebarHostScopeOptions()
-  const [collapsedHosts, setCollapsedHosts] = useState<ReadonlySet<string>>(() => new Set())
+  const { collapsedBotHosts: collapsedHosts } = useCodexCollapseState()
 
   const sections = useMemo(() => {
     const rawHostIds: ExecutionHostId[] = []
@@ -71,18 +75,6 @@ export function BotSidebarHostGroups<Entry extends HostKeyedEntry>({
     return null
   }
 
-  const toggleHost = (hostId: string) => {
-    setCollapsedHosts((prev) => {
-      const next = new Set(prev)
-      if (next.has(hostId)) {
-        next.delete(hostId)
-      } else {
-        next.add(hostId)
-      }
-      return next
-    })
-  }
-
   return (
     <div className="flex flex-col gap-2 px-1 pb-1">
       {sections.map(({ host, items }) => {
@@ -99,7 +91,7 @@ export function BotSidebarHostGroups<Entry extends HostKeyedEntry>({
           <div key={host.hostId} className="flex flex-col gap-0.5">
             <button
               type="button"
-              onClick={() => toggleHost(host.hostId)}
+              onClick={() => toggleCodexBotHostCollapsed(host.hostId)}
               className="flex h-7 items-center gap-1.5 rounded-md px-1.5 text-[12px] font-semibold text-foreground/85 transition-colors hover:bg-worktree-sidebar-foreground/6 hover:text-foreground"
             >
               {collapsed ? (

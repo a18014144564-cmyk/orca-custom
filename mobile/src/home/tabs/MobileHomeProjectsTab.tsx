@@ -1,4 +1,6 @@
 import {
+  ChevronsDownUp,
+  ChevronsUpDown,
   Clock,
   FolderGit2,
   FolderTree,
@@ -22,36 +24,25 @@ import type { Worktree } from '../../worktree/workspace-list/workspace-list-type
 import { homeListStyles } from '../home-list-styles'
 import type { MobileHomeData } from '../use-mobile-home-data'
 import {
-  buildMobileCodexProjectsModel,
-  type MobileCodexProjectRow,
-  type MobileCodexRecentRow
-} from './mobile-codex-projects'
-import {
-  collectBotHomeWorktreeIds,
-  resolvePlatformConnectionHealth,
-  type MobileProjectsPlatform
-} from './mobile-four-zone'
+  setMobileCodexAllProjectsCollapsed,
+  setMobileCodexViewMode,
+  toggleMobileCodexHostCollapsed,
+  toggleMobileCodexOnlyActive,
+  toggleMobileCodexProjectCollapsed,
+  useMobileCodexCollapseState
+} from './mobile-codex-collapse-state'
+import { buildMobileCodexProjectsModel, type MobileCodexProjectRow, type MobileCodexRecentRow } from './mobile-codex-projects'
+import { collectBotHomeWorktreeIds, resolvePlatformConnectionHealth, type MobileProjectsPlatform } from './mobile-four-zone'
 import { mobileHomeProjectsStyles as styles } from './mobile-home-projects-styles'
-import {
-  MobileCodexHostGroupView,
-  MobileCodexProjectRowView,
-  MobileCodexRecentRowView,
-  PlatformSegmentButton
-} from './MobileHomeProjectsRows'
+import { MobileCodexHostGroupView, MobileCodexProjectRowView, MobileCodexRecentRowView, PlatformSegmentButton } from './MobileHomeProjectsRows'
 import { MobileHomeTabEmpty } from './MobileHomeTabEmpty'
 import { MobileHomeTabHeader, MobileHomeTabHeaderButton } from './MobileHomeTabHeader'
 
 const SWIPE_THRESHOLD_PX = 42
 const INITIAL_RECENT_LIMIT = 24
 
-type ViewMode = 'tree' | 'recent'
-
 function projectHasLiveActivity(project: MobileCodexProjectRow): boolean {
-  return (
-    project.statusTone !== 'idle' ||
-    project.unread ||
-    project.threads.some((t) => t.statusTone !== 'idle' || t.unread)
-  )
+  return project.statusTone !== 'idle' || project.unread || project.threads.some((t) => t.statusTone !== 'idle' || t.unread)
 }
 
 /** 4-zone merged Projects tab: swipe/tap between Win and Mac in pure Codex single-tree layout. */
@@ -75,10 +66,7 @@ export function MobileHomeProjectsTab(props: {
   const { isWideLayout, contentMaxWidth } = useResponsiveLayout()
   const { data, platform, winHosts, macHosts, onSelectPlatform } = props
 
-  const [viewMode, setViewMode] = useState<ViewMode>('tree')
-  const [collapsedProjects, setCollapsedProjects] = useState<ReadonlySet<string>>(() => new Set())
-  const [collapsedHosts, setCollapsedHosts] = useState<ReadonlySet<string>>(() => new Set())
-  const [onlyActive, setOnlyActive] = useState(false)
+  const { viewMode, collapsedProjects, collapsedHosts, onlyActive } = useMobileCodexCollapseState()
   const [showAllRecent, setShowAllRecent] = useState(false)
 
   const botHomeWorktreeIds = useMemo(
@@ -115,6 +103,13 @@ export function MobileHomeProjectsTab(props: {
     () => (onlyActive ? currentModel.projects.filter(projectHasLiveActivity) : currentModel.projects),
     [currentModel.projects, onlyActive]
   )
+  const collapsibleProjectKeys = useMemo(
+    () => visibleProjects.filter((p) => p.threads.length > 0 || p.items.length > 1).map((p) => p.key),
+    [visibleProjects]
+  )
+  const allCollapsibleCollapsed =
+    collapsibleProjectKeys.length > 0 && collapsibleProjectKeys.every((key) => collapsedProjects.has(key))
+
   const hostProjectGroups = useMemo(() => {
     if (!multiHost) { return null }
     const byHost = new Map<string, { host: HostCatalogEntry; projects: MobileCodexProjectRow[] }>()
@@ -122,26 +117,6 @@ export function MobileHomeProjectsTab(props: {
     for (const project of visibleProjects) { byHost.get(project.host.id)?.projects.push(project) }
     return [...byHost.values()].filter((group) => group.projects.length > 0)
   }, [currentHosts, multiHost, visibleProjects])
-
-  const toggleHostCollapsed = useCallback((hostId: string) => {
-    setCollapsedHosts((prev) => {
-      const next = new Set(prev)
-      if (next.has(hostId)) { next.delete(hostId) } else { next.add(hostId) }
-      return next
-    })
-  }, [])
-
-  const toggleProjectCollapsed = useCallback((projectKey: string) => {
-    setCollapsedProjects((prev) => {
-      const next = new Set(prev)
-      if (next.has(projectKey)) {
-        next.delete(projectKey)
-      } else {
-        next.add(projectKey)
-      }
-      return next
-    })
-  }, [])
 
   const handlePressRecent = useCallback(
     (item: MobileCodexRecentRow) => {
@@ -304,29 +279,32 @@ export function MobileHomeProjectsTab(props: {
         <View style={[styles.sectionHeaderRow, styles.sectionHeaderFirst]}>
           <Text style={styles.sectionHeaderTitle}>{viewMode === 'tree' ? '线程' : '最近'}</Text>
           <View style={styles.headerActions}>
+            {viewMode === 'tree' && collapsibleProjectKeys.length > 0 ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={allCollapsibleCollapsed ? '全部展开项目' : '全部折叠项目'}
+                onPress={() => setMobileCodexAllProjectsCollapsed(collapsibleProjectKeys, !allCollapsibleCollapsed)}
+                style={styles.filterButton}
+              >
+                {allCollapsibleCollapsed ? <ChevronsUpDown size={14} color={colors.textMuted} /> : <ChevronsDownUp size={14} color={colors.textMuted} />}
+              </Pressable>
+            ) : null}
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={viewMode === 'tree' ? '切换为按最近时间排序' : '切换为按项目分组'}
-              onPress={() => setViewMode((prev) => (prev === 'tree' ? 'recent' : 'tree'))}
+              onPress={() => setMobileCodexViewMode(viewMode === 'tree' ? 'recent' : 'tree')}
               style={styles.filterButton}
             >
-              {viewMode === 'tree' ? (
-                <Clock size={14} color={colors.textMuted} />
-              ) : (
-                <FolderTree size={14} color={colors.textMuted} />
-              )}
+              {viewMode === 'tree' ? <Clock size={14} color={colors.textMuted} /> : <FolderTree size={14} color={colors.textMuted} />}
             </Pressable>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={onlyActive ? '显示全部' : '仅显示进行中'}
               accessibilityState={{ selected: onlyActive }}
-              onPress={() => setOnlyActive((prev) => !prev)}
+              onPress={toggleMobileCodexOnlyActive}
               style={[styles.filterButton, onlyActive && styles.filterButtonActive]}
             >
-              <SlidersHorizontal
-                size={14}
-                color={onlyActive ? colors.textPrimary : colors.textMuted}
-              />
+              <SlidersHorizontal size={14} color={onlyActive ? colors.textPrimary : colors.textMuted} />
             </Pressable>
           </View>
         </View>
@@ -347,8 +325,8 @@ export function MobileHomeProjectsTab(props: {
                   collapsed={collapsedHosts.has(host.id)}
                   collapsedProjects={collapsedProjects}
                   onlyActive={onlyActive}
-                  onToggleHost={() => toggleHostCollapsed(host.id)}
-                  onToggleProject={toggleProjectCollapsed}
+                  onToggleHost={() => toggleMobileCodexHostCollapsed(host.id)}
+                  onToggleProject={toggleMobileCodexProjectCollapsed}
                   onOpenWorktree={props.onOpenWorktree}
                   onSelectThread={handlePressRecent}
                 />
@@ -364,7 +342,7 @@ export function MobileHomeProjectsTab(props: {
                   expanded={!collapsedProjects.has(project.key)}
                   onlyActive={onlyActive}
                   separated={index > 0}
-                  onToggleExpand={() => toggleProjectCollapsed(project.key)}
+                  onToggleExpand={() => toggleMobileCodexProjectCollapsed(project.key)}
                   onOpenWorktree={props.onOpenWorktree}
                   onSelectThread={handlePressRecent}
                 />

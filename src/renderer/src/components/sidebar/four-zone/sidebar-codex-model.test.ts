@@ -8,6 +8,18 @@ import {
 } from './sidebar-four-zone-model'
 import { buildCodexSidebarModel, formatCodexRelativeTime } from './sidebar-codex-model'
 import { groupCodexProjectsByHost, resolveCodexZoneHostMeta } from './sidebar-codex-host-groups'
+import {
+  extractStructuredSessionIdFromKey,
+  extractStructuredSessionIdFromTabId,
+  mergeArchivedCodexThreads
+} from './sidebar-codex-thread-archive'
+import {
+  ensureCodexExpanded,
+  setCodexAllProjectsCollapsed,
+  toggleCodexBotHostCollapsed,
+  toggleCodexHostCollapsed,
+  toggleCodexProjectCollapsed
+} from './sidebar-codex-collapse-state'
 import { botOwnChatTree, type BotChatTreeChat, type BotChatTreeWorker } from '../../../../../shared/bots/bot-chat-tree'
 import { botChatSearchHits } from '../../../../../shared/bots/bot-chat-tree-view'
 import type { Repo } from '../../../../../shared/repository/repo-types'
@@ -468,5 +480,68 @@ describe('buildCodexSidebarModel', () => {
     expect(formatCodexRelativeTime(now - 5 * 60_000, now)).toBe('5m')
     expect(formatCodexRelativeTime(now - 3 * 3600_000, now)).toBe('3h')
     expect(formatCodexRelativeTime(now - 4 * 86400_000, now)).toBe('4d')
+  })
+
+  it('extracts structured session IDs from legacy/host keys and backfills archived rows with null sessionId', () => {
+    expect(
+      extractStructuredSessionIdFromKey(
+        'thread:structured-agent-session-sess-abc-123:01234567-89ab-4cde-a012-3456789abcde'
+      )
+    ).toBe('sess-abc-123')
+    expect(
+      extractStructuredSessionIdFromKey('thread:agent-session:sess-xyz-789:leaf-1')
+    ).toBe('sess-xyz-789')
+    expect(extractStructuredSessionIdFromTabId('structured-agent-session-sess-1')).toBe('sess-1')
+    expect(extractStructuredSessionIdFromTabId('agent-session:sess-2')).toBe('sess-2')
+
+    const localHost = 'local' as ExecutionHostId
+    const repo = makeRepo({ id: 'r1', displayName: '手机专区', executionHostId: localHost })
+    const wt = makeWorktree({ id: 'wt-1', repoId: 'r1', hostId: localHost, lastActivityAt: 1000 })
+    const model = buildCodexSidebarModel({
+      repos: [repo],
+      worktreesByRepo: { r1: [wt] },
+      folderWorkspaces: [],
+      botHomeOwners: [],
+      allThreads: [],
+      tabsByWorktree: {},
+      browserTabsByWorktree: {},
+      hostIds: [localHost],
+      defaultHostId: localHost,
+      activeWorktreeId: null,
+      selectedPaneKey: null,
+      onlyActiveRecent: false
+    })
+    mergeArchivedCodexThreads({
+      projects: model.projects,
+      liveRows: model.recentItems,
+      archivedThreads: [
+        {
+          key: 'thread:structured-agent-session-sess-recover:aaaaaaaa-bbbb-4ccc-addd-eeeeeeeeeeee',
+          title: '关于桌面的，我新换了一个',
+          projectName: '手机专区',
+          worktreeId: 'wt-1',
+          hostId: localHost,
+          sessionId: null,
+          agentType: 'antigravity',
+          timestamp: 2000
+        }
+      ],
+      hostIdSet: new Set([localHost]),
+      botHomeWorktreeIds: new Set(),
+      activeWorktreeId: null,
+      selectedPaneKey: null
+    })
+    expect(model.projects[0].threads).toHaveLength(1)
+    expect(model.projects[0].threads[0].archivedSessionId).toBe('sess-recover')
+  })
+
+  it('persists collapse toggles across hosts, projects, and bot hosts', () => {
+    toggleCodexHostCollapsed('runtime:mac-1')
+    toggleCodexProjectCollapsed('repo:r1:local')
+    toggleCodexBotHostCollapsed('runtime:win-1')
+    setCodexAllProjectsCollapsed(['repo:r2:local'], true)
+    ensureCodexExpanded('runtime:mac-1', 'repo:r1:local')
+    setCodexAllProjectsCollapsed(['repo:r2:local'], false)
+    toggleCodexBotHostCollapsed('runtime:win-1')
   })
 })

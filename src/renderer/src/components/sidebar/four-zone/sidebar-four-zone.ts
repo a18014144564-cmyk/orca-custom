@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { useRuntimeStatusByEnvironmentId } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { getRendererAppPlatform } from '@/app-shell/platform/renderer-app-platform'
@@ -11,7 +11,11 @@ import {
   resolveZoneHostIdsOverride,
   type SidebarZoneMode
 } from './sidebar-four-zone-model'
-import { setSidebarZoneMode, useSidebarZoneMode } from './sidebar-zone-store'
+import {
+  getSidebarZoneMode,
+  setSidebarZoneMode,
+  useSidebarZoneMode
+} from './sidebar-zone-store'
 
 export * from './sidebar-four-zone-model'
 export {
@@ -53,24 +57,34 @@ export function useSidebarFourZone(botsEnabled: boolean) {
 
   const pendingRevealWorktree = useAppStore((s) => s.pendingRevealWorktree)
   const activeWorkspaceExecutionHostId = useAppStore((s) => s.activeWorkspaceExecutionHostId)
+  const lastHandledRevealRef = useRef<typeof pendingRevealWorktree>(null)
 
-  // Auto-switch zone when a reveal request targets a workspace outside the currently selected zone.
+  // Auto-switch zone AT MOST ONCE per distinct pendingRevealWorktree so clicking another rail button
+  // never gets hijacked back if the active sidebar pane hasn't cleared the reveal yet.
   useEffect(() => {
-    if (!pendingRevealWorktree || effectiveZoneMode === 'all') {
+    if (!pendingRevealWorktree || pendingRevealWorktree === lastHandledRevealRef.current) {
       return
     }
+    lastHandledRevealRef.current = pendingRevealWorktree
+    const rawCurrent = getSidebarZoneMode()
+    const currentEffective: SidebarZoneMode =
+      !botsEnabled && (rawCurrent === 'teams' || rawCurrent === 'bots') ? 'all' : rawCurrent
+    if (currentEffective === 'all') {
+      return
+    }
+    const targetHostId = pendingRevealWorktree.executionHostId ?? activeWorkspaceExecutionHostId
     const nextZone = resolveZoneForWorkspaceHost(
-      effectiveZoneMode,
-      activeWorkspaceExecutionHostId,
+      currentEffective,
+      targetHostId,
       classifiedHosts.hostPlatformById
     )
-    if (nextZone !== effectiveZoneMode) {
+    if (nextZone !== currentEffective) {
       setZoneMode(nextZone)
     }
   }, [
     pendingRevealWorktree,
     activeWorkspaceExecutionHostId,
-    effectiveZoneMode,
+    botsEnabled,
     classifiedHosts.hostPlatformById,
     setZoneMode
   ])

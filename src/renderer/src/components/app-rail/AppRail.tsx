@@ -111,6 +111,10 @@ export function AppRail({
   const activateZoneRailItem = (targetZone: SidebarZoneMode): void => {
     navigateFromRail(() => {
       const state = useAppStore.getState()
+      // Explicit user zone click always wins over any lingering worktree reveal request.
+      if (state.pendingRevealWorktree) {
+        state.clearPendingRevealWorktreeId(state.pendingRevealWorktree)
+      }
       const liveZone: SidebarZoneMode =
         !botsEnabled && (getSidebarZoneMode() === 'teams' || getSidebarZoneMode() === 'bots')
           ? 'all'

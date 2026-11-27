@@ -1,11 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronDown, ChevronRight, Clock, FolderTree, LayoutList, Plus, SlidersHorizontal } from 'lucide-react'
+import { ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Clock, FolderTree, LayoutList, Plus, SlidersHorizontal } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
-import {
-  selectFolderWorkspaces,
-  selectWorktreesByRepo
-} from '@/store/workspaces/catalog/workspace-record-fields'
+import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { selectSidebarChildrenByParentIdentity } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import { cn } from '@/lib/class-names'
 import { useBots, useBotsEnabled } from '@/lib/bot-catalog'
@@ -17,32 +14,28 @@ import { createActivityThreadActions } from '@/components/activity/thread-list/a
 import { openHeaderCreateComposer } from '../worktree-list/rows/header-create-workspace-target'
 import { getBotHomes, getBotListedWorktreeIdentities } from '../../../../../shared/bots/bot-homes'
 import type { Worktree } from '../../../../../shared/worktree/types'
-import {
-  getSettingsFocusedExecutionHostId,
-  type ExecutionHostId
-} from '../../../../../shared/execution-host/execution-host'
+import { getSettingsFocusedExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { collectExcludedBotSessionIds } from './sidebar-codex-bot-filter'
 import { useSidebarHostScopeOptions } from '../worktree-list/controls/use-sidebar-host-scope-options'
 import { groupCodexProjectsByHost, resolveCodexZoneHostMeta } from './sidebar-codex-host-groups'
 import { buildCodexSidebarModel, type CodexProjectRow, type CodexRecentRow } from './sidebar-codex-model'
 import {
-  dismissCodexArchivedThread,
-  rememberLiveCodexThreads,
-  useCodexArchivedThreads
-} from './sidebar-codex-thread-archive'
+  ensureCodexExpanded,
+  setCodexAllProjectsCollapsed,
+  setCodexViewMode,
+  toggleCodexHostCollapsed,
+  toggleCodexOnlyActive,
+  toggleCodexProjectCollapsed,
+  useCodexCollapseState
+} from './sidebar-codex-collapse-state'
+import { dismissCodexArchivedThread, rememberLiveCodexThreads, useCodexArchivedThreads } from './sidebar-codex-thread-archive'
 import { reopenArchivedCodexThread } from './sidebar-codex-reopen'
-import {
-  moveCodexThreadToProject,
-  resetCodexThreadProject,
-  useCodexThreadProjectMap
-} from './sidebar-codex-thread-moves'
+import { moveCodexThreadToProject, resetCodexThreadProject, useCodexThreadProjectMap } from './sidebar-codex-thread-moves'
 import { CodexProjectRowItem, CodexRecentRowItem } from './SidebarPlatformCodexRows'
 
 const INITIAL_RECENT_LIMIT = 24
 const NO_CHILDREN: ReadonlyMap<string, readonly Worktree[]> = new Map()
 const EMPTY_IDENTITIES: ReadonlySet<string> = new Set()
-
-type ViewMode = 'tree' | 'recent'
 
 type SidebarPlatformCodexPaneProps = {
   hostIds: readonly ExecutionHostId[]
@@ -68,8 +61,11 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
   const folderWorkspaces = useAppStore(selectFolderWorkspaces)
   const worktreeLineageById = useAppStore((s) => s.worktreeLineageById)
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
+  const unifiedTabsByWorktree = useAppStore((s) => s.unifiedTabsByWorktree)
   const browserTabsByWorktree = useAppStore((s) => s.browserTabsByWorktree)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const pendingRevealWorktree = useAppStore((s) => s.pendingRevealWorktree)
+  const clearPendingRevealWorktreeId = useAppStore((s) => s.clearPendingRevealWorktreeId)
   const settings = useAppStore((s) => s.settings)
   const openModal = useAppStore((s) => s.openModal)
   const updateRepo = useAppStore((s) => s.updateRepo)
@@ -82,10 +78,7 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
   const botGroups = useBotGroups(botsEnabled)
   const { allThreads } = useAllAgentPaneThreads()
 
-  const [viewMode, setViewMode] = useState<ViewMode>('tree')
-  const [collapsedProjects, setCollapsedProjects] = useState<ReadonlySet<string>>(() => new Set())
-  const [collapsedHosts, setCollapsedHosts] = useState<ReadonlySet<string>>(() => new Set())
-  const [onlyActive, setOnlyActive] = useState(false)
+  const { viewMode, collapsedProjects, collapsedHosts, onlyActive } = useCodexCollapseState()
   const [showAllRecent, setShowAllRecent] = useState(false)
   const [selectedPaneKey, setSelectedPaneKey] = useState<string | null>(null)
   const threadProjectOverrides = useCodexThreadProjectMap()
@@ -148,8 +141,22 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
   )
 
   useEffect(() => {
-    rememberLiveCodexThreads(model.recentItems)
-  }, [model.recentItems])
+    rememberLiveCodexThreads(model.recentItems, unifiedTabsByWorktree)
+  }, [model.recentItems, unifiedTabsByWorktree])
+
+  // Consume reveal requests (e.g. after creating a new project) so stale pendingRevealWorktree never blocks rail navigation.
+  useEffect(() => {
+    if (!pendingRevealWorktree) {
+      return
+    }
+    const targetProject = model.projects.find((project) =>
+      project.worktrees.some((wt) => wt.id === pendingRevealWorktree.worktreeId)
+    )
+    if (targetProject) {
+      ensureCodexExpanded(targetProject.hostId, targetProject.key)
+    }
+    clearPendingRevealWorktreeId(pendingRevealWorktree)
+  }, [clearPendingRevealWorktreeId, model.projects, pendingRevealWorktree])
 
   const visibleProjects = useMemo(
     () => (onlyActive ? model.projects.filter(projectMatchesActiveFilter) : model.projects),
@@ -162,21 +169,12 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
     [groupByHost, hostMeta, visibleProjects]
   )
 
-  const toggleHostCollapsed = useCallback((hostId: string) => {
-    setCollapsedHosts((prev) => {
-      const next = new Set(prev)
-      if (next.has(hostId)) { next.delete(hostId) } else { next.add(hostId) }
-      return next
-    })
-  }, [])
-
-  const toggleProjectCollapsed = useCallback((projectKey: string) => {
-    setCollapsedProjects((prev) => {
-      const next = new Set(prev)
-      if (next.has(projectKey)) { next.delete(projectKey) } else { next.add(projectKey) }
-      return next
-    })
-  }, [])
+  const collapsibleProjectKeys = useMemo(
+    () => visibleProjects.filter((p) => p.threads.length > 0 || p.worktrees.length > 1).map((p) => p.key),
+    [visibleProjects]
+  )
+  const allCollapsibleCollapsed =
+    collapsibleProjectKeys.length > 0 && collapsibleProjectKeys.every((key) => collapsedProjects.has(key))
 
   const threadsRef = useRef(allThreads)
   threadsRef.current = allThreads
@@ -234,18 +232,18 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
         onWorktreeClick?.()
         return
       }
-      if (reopenArchivedCodexThread(item)) {
-        onWorktreeClick?.()
-        return
-      }
-      handleActivateWorktree(item.worktreeId, item.hostId)
+      setSelectedPaneKey(item.key)
+      void reopenArchivedCodexThread(item).then((opened) => {
+        if (!opened) {
+          handleActivateWorktree(item.worktreeId, item.hostId)
+        }
+      })
+      onWorktreeClick?.()
     },
     [handleActivateWorktree, onWorktreeClick, threadActions]
   )
 
-  const visibleRecentItems = showAllRecent
-    ? model.recentItems
-    : model.recentItems.slice(0, INITIAL_RECENT_LIMIT)
+  const visibleRecentItems = showAllRecent ? model.recentItems : model.recentItems.slice(0, INITIAL_RECENT_LIMIT)
   const hiddenRecentCount = model.recentItems.length - visibleRecentItems.length
   const renderProjectRow = (project: CodexProjectRow) => (
     <CodexProjectRowItem
@@ -255,7 +253,7 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
       movedThreadKeys={threadProjectOverrides}
       isExpanded={!collapsedProjects.has(project.key)}
       onlyActive={onlyActive}
-      onToggleExpand={toggleProjectCollapsed}
+      onToggleExpand={toggleCodexProjectCollapsed}
       onActivateWorktree={handleActivateWorktree}
       onSelectThread={handleSelectThread}
       onCreateWorkspace={handleProjectCreate}
@@ -295,19 +293,32 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
         </span>
 
         <div className="flex items-center gap-0.5">
+          {viewMode === 'tree' && collapsibleProjectKeys.length > 0 ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  aria-label={allCollapsibleCollapsed ? '全部展开项目' : '全部折叠项目'}
+                  onClick={() => setCodexAllProjectsCollapsed(collapsibleProjectKeys, !allCollapsibleCollapsed)}
+                  className="flex size-5 items-center justify-center rounded text-muted-foreground/80 transition-colors hover:bg-worktree-sidebar-foreground/8 hover:text-foreground"
+                >
+                  {allCollapsibleCollapsed ? <ChevronsUpDown className="size-3" /> : <ChevronsDownUp className="size-3" />}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={6}>
+                {allCollapsibleCollapsed ? '全部展开项目' : '全部折叠项目'}
+              </TooltipContent>
+            </Tooltip>
+          ) : null}
           <Tooltip>
             <TooltipTrigger asChild>
               <button
                 type="button"
                 aria-label={viewMode === 'tree' ? '切换为按最近时间排序' : '切换为按项目树形分组'}
-                onClick={() => setViewMode((prev) => (prev === 'tree' ? 'recent' : 'tree'))}
+                onClick={() => setCodexViewMode(viewMode === 'tree' ? 'recent' : 'tree')}
                 className="flex size-5 items-center justify-center rounded text-muted-foreground/80 transition-colors hover:bg-worktree-sidebar-foreground/8 hover:text-foreground"
               >
-                {viewMode === 'tree' ? (
-                  <Clock className="size-3" />
-                ) : (
-                  <FolderTree className="size-3" />
-                )}
+                {viewMode === 'tree' ? <Clock className="size-3" /> : <FolderTree className="size-3" />}
               </button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
@@ -320,7 +331,7 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
                 type="button"
                 aria-label={onlyActive ? '显示全部' : '仅显示进行中'}
                 aria-pressed={onlyActive}
-                onClick={() => setOnlyActive((prev) => !prev)}
+                onClick={toggleCodexOnlyActive}
                 className={cn(
                   'flex size-5 items-center justify-center rounded transition-colors',
                   onlyActive
@@ -368,22 +379,14 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
                     : 'bg-muted-foreground/45'
               return (
                 <div key={host.hostId} className="flex flex-col gap-0.5">
-                  <button
-                    type="button"
-                    onClick={() => toggleHostCollapsed(host.hostId)}
-                    className="flex h-7 items-center gap-1.5 rounded-md px-1.5 text-[12px] font-semibold text-foreground/85 transition-colors hover:bg-worktree-sidebar-foreground/6 hover:text-foreground"
-                  >
+                  <button type="button" onClick={() => toggleCodexHostCollapsed(host.hostId)} className="flex h-7 items-center gap-1.5 rounded-md px-1.5 text-[12px] font-semibold text-foreground/85 transition-colors hover:bg-worktree-sidebar-foreground/6 hover:text-foreground">
                     {hostCollapsed ? <ChevronRight className="size-3.5 shrink-0 text-muted-foreground/75" /> : <ChevronDown className="size-3.5 shrink-0 text-muted-foreground/75" />}
                     <span aria-hidden className={cn('size-1.5 shrink-0 rounded-full', dotClass)} />
                     <span className="min-w-0 truncate">{host.label}</span>
                     <span className="shrink-0 rounded bg-worktree-sidebar-foreground/6 px-1 py-0.5 text-[10px] leading-none font-medium text-muted-foreground">{host.tag}</span>
                     <span className="ml-auto shrink-0 text-[10.5px] font-normal tabular-nums text-muted-foreground/65">{projects.length}</span>
                   </button>
-                  {!hostCollapsed ? (
-                    <div className="ml-2.5 flex flex-col gap-0.5 border-l border-worktree-sidebar-border/70 pl-2">
-                      {projects.map(renderProjectRow)}
-                    </div>
-                  ) : null}
+                  {!hostCollapsed ? <div className="ml-2.5 flex flex-col gap-0.5 border-l border-worktree-sidebar-border/70 pl-2">{projects.map(renderProjectRow)}</div> : null}
                 </div>
               )
             })}
@@ -392,29 +395,16 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
           <div className="flex flex-col gap-0.5">{visibleProjects.map(renderProjectRow)}</div>
         )
       ) : visibleRecentItems.length === 0 ? (
-        <p className="px-2 py-4 text-xs text-muted-foreground/75">
-          {onlyActive ? '当前没有进行中的对话' : '暂无最近对话'}
-        </p>
+        <p className="px-2 py-4 text-xs text-muted-foreground/75">{onlyActive ? '当前没有进行中的对话' : '暂无最近对话'}</p>
       ) : (
         <div className="flex flex-col gap-0.5">
           {visibleRecentItems.map((item) => {
             const hostInfo = hostMeta.multiHost ? hostMeta.hostInfoById.get(item.hostId) : undefined
             const hostTag = hostInfo ? (hostInfo.isLocal ? '本地' : hostInfo.label) : undefined
-            return (
-              <CodexRecentRowItem
-                key={item.key}
-                item={item}
-                hostTag={hostTag}
-                onSelect={handleSelectThread}
-              />
-            )
+            return <CodexRecentRowItem key={item.key} item={item} hostTag={hostTag} onSelect={handleSelectThread} />
           })}
           {hiddenRecentCount > 0 ? (
-            <button
-              type="button"
-              onClick={() => setShowAllRecent(true)}
-              className="mt-0.5 rounded-md px-2 py-1 text-left text-[11px] text-muted-foreground transition-colors hover:bg-worktree-sidebar-foreground/6 hover:text-foreground"
-            >
+            <button type="button" onClick={() => setShowAllRecent(true)} className="mt-0.5 rounded-md px-2 py-1 text-left text-[11px] text-muted-foreground transition-colors hover:bg-worktree-sidebar-foreground/6 hover:text-foreground">
               展开其余 {hiddenRecentCount} 条…
             </button>
           ) : null}
