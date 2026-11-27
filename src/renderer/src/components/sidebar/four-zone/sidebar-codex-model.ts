@@ -95,13 +95,9 @@ export function buildCodexSidebarModel(args: {
 
   for (const thread of args.allThreads) {
     const wtId = thread.worktree.id
-    if (wtId === FLOATING_TERMINAL_WORKTREE_ID) {
-      continue
-    }
+    if (wtId === FLOATING_TERMINAL_WORKTREE_ID) { continue }
     const repo = thread.repo ?? repoById.get(thread.worktree.repoId) ?? null
-    if (repo?.hiddenAt || repo?.orcadRetained) {
-      continue
-    }
+    if (repo?.hiddenAt || repo?.orcadRetained) { continue }
     const hostId = getWorktreeExecutionHostId(thread.worktree, repo ?? undefined, args.defaultHostId)
     if (
       !hostIdSet.has(hostId) ||
@@ -276,6 +272,7 @@ export function buildCodexSidebarModel(args: {
       hostId: canonicalHostId,
       name: folder.name,
       repo: null,
+      folderId: folder.id,
       markRepo,
       primaryWorktree: item,
       worktrees: [item],

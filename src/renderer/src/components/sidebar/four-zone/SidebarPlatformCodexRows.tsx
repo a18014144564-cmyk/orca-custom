@@ -1,6 +1,13 @@
-import React, { useState } from 'react'
-import { Folder, FolderOpen, GitBranch, SquarePen } from 'lucide-react'
+import React, { useEffect, useRef, useState } from 'react'
+import { Folder, FolderOpen, GitBranch, Pencil, SquarePen } from 'lucide-react'
 import { cn } from '@/lib/class-names'
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger
+} from '@/components/ui/context-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import {
@@ -45,7 +52,8 @@ export function CodexProjectRowItem({
   onToggleExpand,
   onActivateWorktree,
   onSelectThread,
-  onCreateWorkspace
+  onCreateWorkspace,
+  onRenameProject
 }: {
   project: CodexProjectRow
   isExpanded: boolean
@@ -54,8 +62,37 @@ export function CodexProjectRowItem({
   onActivateWorktree: (worktreeId: string, hostId: ExecutionHostId) => void
   onSelectThread: (item: CodexRecentRow) => void
   onCreateWorkspace: (project: CodexProjectRow) => void
+  onRenameProject: (project: CodexProjectRow, nextName: string) => void | Promise<void>
 }): React.JSX.Element {
   const [showAllThreads, setShowAllThreads] = useState(false)
+  const [renaming, setRenaming] = useState(false)
+  const [draftName, setDraftName] = useState(project.name)
+  const inputRef = useRef<HTMLInputElement | null>(null)
+
+  useEffect(() => {
+    if (renaming) {
+      inputRef.current?.focus()
+      inputRef.current?.select()
+    }
+  }, [renaming])
+
+  const beginRename = () => {
+    setDraftName(project.name)
+    setRenaming(true)
+  }
+
+  const commitRename = () => {
+    setRenaming(false)
+    const trimmed = draftName.trim()
+    if (trimmed && trimmed !== project.name) {
+      void onRenameProject(project, trimmed)
+    }
+  }
+
+  const cancelRename = () => {
+    setRenaming(false)
+    setDraftName(project.name)
+  }
 
   const filteredThreads = onlyActive
     ? project.threads.filter(isLiveCodexThread)
@@ -85,59 +122,108 @@ export function CodexProjectRowItem({
 
   return (
     <div className="flex flex-col">
-      <div
-        className={cn(
-          'group flex h-7 items-center gap-1.5 rounded-md px-2 text-[13px] transition-colors',
-          highlightProjectRow
-            ? 'bg-worktree-sidebar-foreground/10 font-medium text-foreground'
-            : hasActiveChild
-              ? 'font-medium text-foreground/90 hover:bg-worktree-sidebar-foreground/6'
-              : 'text-foreground/78 hover:bg-worktree-sidebar-foreground/6 hover:text-foreground'
-        )}
-      >
-        <button
-          type="button"
-          onClick={() => {
-            if (hasChildren) {
-              onToggleExpand(project.key)
-            } else {
-              onActivateWorktree(project.primaryWorktree.id, project.primaryWorktree.hostId)
-            }
-          }}
-          className="flex min-w-0 flex-1 items-center gap-2 text-left outline-none"
-        >
-          {childrenVisible ? (
-            <FolderOpen className="size-3.5 shrink-0 text-muted-foreground/75" aria-hidden />
-          ) : (
-            <Folder className="size-3.5 shrink-0 text-muted-foreground/75" aria-hidden />
-          )}
-          <span className="min-w-0 flex-1 truncate">{project.name}</span>
-        </button>
-
-        <div className="flex shrink-0 items-center gap-1.5">
-          {!childrenVisible && project.statusTone !== 'idle' ? (
-            <CodexStatusDot tone={project.statusTone} />
-          ) : null}
-          <Tooltip>
-            <TooltipTrigger asChild>
+      <ContextMenu>
+        <ContextMenuTrigger asChild>
+          <div
+            className={cn(
+              'group flex h-7 items-center gap-1.5 rounded-md px-2 text-[13px] transition-colors',
+              highlightProjectRow
+                ? 'bg-worktree-sidebar-foreground/10 font-medium text-foreground'
+                : hasActiveChild
+                  ? 'font-medium text-foreground/90 hover:bg-worktree-sidebar-foreground/6'
+                  : 'text-foreground/78 hover:bg-worktree-sidebar-foreground/6 hover:text-foreground'
+            )}
+          >
+            {renaming ? (
+              <div className="flex min-w-0 flex-1 items-center gap-2">
+                <Folder className="size-3.5 shrink-0 text-muted-foreground/75" aria-hidden />
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={draftName}
+                  onChange={(event) => setDraftName(event.target.value)}
+                  onBlur={commitRename}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault()
+                      commitRename()
+                    } else if (event.key === 'Escape') {
+                      event.preventDefault()
+                      cancelRename()
+                    }
+                  }}
+                  aria-label="修改项目名称"
+                  className="h-5 min-w-0 flex-1 rounded bg-background px-1.5 text-[13px] font-normal text-foreground ring-1 ring-ring outline-none"
+                />
+              </div>
+            ) : (
               <button
                 type="button"
-                aria-label={`在 ${project.name} 中新建对话`}
-                onClick={(event) => {
-                  event.stopPropagation()
-                  onCreateWorkspace(project)
+                onClick={() => {
+                  if (hasChildren) {
+                    onToggleExpand(project.key)
+                  } else {
+                    onActivateWorktree(project.primaryWorktree.id, project.primaryWorktree.hostId)
+                  }
                 }}
-                className="flex size-5 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:bg-worktree-sidebar-foreground/10 hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100"
+                className="flex min-w-0 flex-1 items-center gap-2 text-left outline-none"
               >
-                <SquarePen className="size-3" />
+                {childrenVisible ? (
+                  <FolderOpen className="size-3.5 shrink-0 text-muted-foreground/75" aria-hidden />
+                ) : (
+                  <Folder className="size-3.5 shrink-0 text-muted-foreground/75" aria-hidden />
+                )}
+                <span className="min-w-0 flex-1 truncate">{project.name}</span>
               </button>
-            </TooltipTrigger>
-            <TooltipContent side="right" sideOffset={6}>
-              在 {project.name} 新建对话
-            </TooltipContent>
-          </Tooltip>
-        </div>
-      </div>
+            )}
+
+            {!renaming ? (
+              <div className="flex shrink-0 items-center gap-1.5">
+                {!childrenVisible && project.statusTone !== 'idle' ? (
+                  <CodexStatusDot tone={project.statusTone} />
+                ) : null}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      aria-label={`在 ${project.name} 中新建对话`}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        onCreateWorkspace(project)
+                      }}
+                      className="flex size-5 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:bg-worktree-sidebar-foreground/10 hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100"
+                    >
+                      <SquarePen className="size-3" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="right" sideOffset={6}>
+                    在 {project.name} 新建对话
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+            ) : null}
+          </div>
+        </ContextMenuTrigger>
+        <ContextMenuContent className="w-40">
+          <ContextMenuItem onSelect={() => setTimeout(beginRename, 0)}>
+            <Pencil className="mr-2 size-3.5" />
+            重命名项目
+          </ContextMenuItem>
+          <ContextMenuItem onSelect={() => onCreateWorkspace(project)}>
+            <SquarePen className="mr-2 size-3.5" />
+            新建对话 / 工作区
+          </ContextMenuItem>
+          <ContextMenuSeparator />
+          <ContextMenuItem
+            onSelect={() =>
+              onActivateWorktree(project.primaryWorktree.id, project.primaryWorktree.hostId)
+            }
+          >
+            <FolderOpen className="mr-2 size-3.5" />
+            打开工作区
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
 
       {childrenVisible ? (
         <div className="mt-0.5 mb-1 flex flex-col gap-0.5 pl-4">

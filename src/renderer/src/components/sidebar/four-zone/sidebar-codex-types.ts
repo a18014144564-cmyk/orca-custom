@@ -30,6 +30,7 @@ export type CodexProjectRow = {
   hostId: ExecutionHostId
   name: string
   repo: Repo | null
+  folderId?: string
   markRepo: RepoMarkRepo
   primaryWorktree: CodexProjectWorktreeItem
   worktrees: CodexProjectWorktreeItem[]

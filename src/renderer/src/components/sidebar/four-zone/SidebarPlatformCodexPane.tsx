@@ -61,6 +61,8 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const settings = useAppStore((s) => s.settings)
   const openModal = useAppStore((s) => s.openModal)
+  const updateRepo = useAppStore((s) => s.updateRepo)
+  const updateFolderWorkspace = useAppStore((s) => s.updateFolderWorkspace)
   const acknowledgeAgents = useAppStore((s) => s.acknowledgeAgents)
   const unacknowledgeAgents = useAppStore((s) => s.unacknowledgeAgents)
 
@@ -155,11 +157,7 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
   const toggleHostCollapsed = useCallback((hostId: string) => {
     setCollapsedHosts((prev) => {
       const next = new Set(prev)
-      if (next.has(hostId)) {
-        next.delete(hostId)
-      } else {
-        next.add(hostId)
-      }
+      if (next.has(hostId)) { next.delete(hostId) } else { next.add(hostId) }
       return next
     })
   }, [])
@@ -167,11 +165,7 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
   const toggleProjectCollapsed = useCallback((projectKey: string) => {
     setCollapsedProjects((prev) => {
       const next = new Set(prev)
-      if (next.has(projectKey)) {
-        next.delete(projectKey)
-      } else {
-        next.add(projectKey)
-      }
+      if (next.has(projectKey)) { next.delete(projectKey) } else { next.add(projectKey) }
       return next
     })
   }, [])
@@ -212,6 +206,17 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
       }
     },
     [openModal]
+  )
+
+  const handleRenameProject = useCallback(
+    async (project: CodexProjectRow, nextName: string) => {
+      if (project.kind === 'repo' && project.repo) {
+        await updateRepo(project.repo.id, { displayName: nextName }, { hostId: project.primaryWorktree.hostId })
+      } else if (project.kind === 'folder' && project.folderId) {
+        await updateFolderWorkspace(project.folderId, { name: nextName }, { executionHostId: project.primaryWorktree.hostId })
+      }
+    },
+    [updateFolderWorkspace, updateRepo]
   )
 
   const handleSelectThread = useCallback(
@@ -351,6 +356,7 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
                           onActivateWorktree={handleActivateWorktree}
                           onSelectThread={handleSelectThread}
                           onCreateWorkspace={handleProjectCreate}
+                          onRenameProject={handleRenameProject}
                         />
                       ))}
                     </div>
@@ -371,6 +377,7 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
                 onActivateWorktree={handleActivateWorktree}
                 onSelectThread={handleSelectThread}
                 onCreateWorkspace={handleProjectCreate}
+                onRenameProject={handleRenameProject}
               />
             ))}
           </div>
