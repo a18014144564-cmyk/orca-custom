@@ -246,16 +246,26 @@ export function buildPlatformProjectGroups(args: {
   >()
 
   for (const host of hosts) {
-    const rows = worktreeInfo[host.id]?.rows
+    const info = worktreeInfo[host.id]
+    const rows = info?.rows
+    const lineageById = info?.workspaceLineage
     if (!rows || rows.length === 0) {
       continue
     }
     for (const row of rows) {
+      const lineage = lineageById?.[row.worktreeId]
+      const isBotOrWorkerLineage =
+        lineage != null &&
+        (lineage.origin === 'orchestration' ||
+          lineage.capture?.source === 'bot-hand-over' ||
+          Boolean(lineage.orchestrationRunId))
       if (
         row.isArchived === true ||
         row.botHome === true ||
+        Boolean(row.bot) ||
         row.repo === 'Bots' ||
-        botHomeWorktreeIds.has(row.worktreeId)
+        botHomeWorktreeIds.has(row.worktreeId) ||
+        isBotOrWorkerLineage
       ) {
         continue
       }
@@ -280,52 +290,32 @@ export function buildPlatformProjectGroups(args: {
 
   const groups: PlatformProjectGroup[] = []
   for (const [key, group] of groupsByKey) {
-    const items = [...group.items].sort((a, b) => {
-      if (a.row.isPinned !== b.row.isPinned) {
-        return a.row.isPinned ? -1 : 1
-      }
-      if (a.working !== b.working) {
-        return a.working ? -1 : 1
-      }
-      if (a.unread !== b.unread) {
-        return a.unread ? -1 : 1
-      }
-      if (a.active !== b.active) {
-        return a.active ? -1 : 1
-      }
-      if (a.lastActivityAt !== b.lastActivityAt) {
-        return b.lastActivityAt - a.lastActivityAt
-      }
-      return (a.row.displayName || a.row.repo).localeCompare(b.row.displayName || b.row.repo)
-    })
-
-    const hasAttention = items.some((item) => item.working || item.unread || item.active)
-    const lastActivityAt = items.reduce((max, item) => Math.max(max, item.lastActivityAt), 0)
+    const items = [...group.items].sort(
+      (a, b) =>
+        Number(Boolean(b.row.isPinned)) - Number(Boolean(a.row.isPinned)) ||
+        Number(b.working) - Number(a.working) ||
+        Number(b.unread) - Number(a.unread) ||
+        Number(b.active) - Number(a.active) ||
+        b.lastActivityAt - a.lastActivityAt ||
+        (a.row.displayName || a.row.repo).localeCompare(b.row.displayName || b.row.repo)
+    )
     groups.push({
       key,
       host: group.host,
       repo: group.repo,
       items,
-      hasAttention,
-      lastActivityAt
+      hasAttention: items.some((item) => item.working || item.unread || item.active),
+      lastActivityAt: items.reduce((max, item) => Math.max(max, item.lastActivityAt), 0)
     })
   }
-
-  return groups.sort((a, b) => {
-    if (a.hasAttention !== b.hasAttention) {
-      return a.hasAttention ? -1 : 1
-    }
-    if (a.lastActivityAt !== b.lastActivityAt) {
-      return b.lastActivityAt - a.lastActivityAt
-    }
-    return a.repo.localeCompare(b.repo)
-  })
+  return groups.sort(
+    (a, b) =>
+      Number(b.hasAttention) - Number(a.hasAttention) ||
+      b.lastActivityAt - a.lastActivityAt ||
+      a.repo.localeCompare(b.repo)
+  )
 }
 
 export function countPlatformProjectItems(groups: readonly PlatformProjectGroup[]): number {
-  let total = 0
-  for (const group of groups) {
-    total += group.items.length
-  }
-  return total
+  return groups.reduce((sum, group) => sum + group.items.length, 0)
 }

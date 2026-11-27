@@ -13,8 +13,37 @@ import {
   flattenAgentRowLineage,
   type AgentRowNode
 } from '../worktree/agent-lineage/agent-row-lineage'
+import { isBotGroupMemberSession } from '../../../src/shared/bots/bot-group'
 import type { HomeAgentEntry, HostWorktreeInfo } from '../worktree/catalog/home-worktree-info'
 import { agentListTitle } from './agent-list-row-text'
+
+function isTeamOrWorkerAgentEntry(
+  entry: HomeAgentEntry,
+  info: HostWorktreeInfo | undefined
+): boolean {
+  const { agent, worktreeId } = entry
+  if (
+    agent.paneKey.includes('bot-group-member-') ||
+    isBotGroupMemberSession(agent.orcaSessionId) ||
+    agent.parentPaneKey != null
+  ) {
+    return true
+  }
+  const lineage = info?.workspaceLineage?.[worktreeId]
+  if (
+    lineage &&
+    (lineage.origin === 'orchestration' ||
+      lineage.capture?.source === 'bot-hand-over' ||
+      Boolean(lineage.orchestrationRunId))
+  ) {
+    return true
+  }
+  const row = info?.rows?.find((candidate) => candidate.worktreeId === worktreeId)
+  if (row && row.bot && !row.botHome) {
+    return true
+  }
+  return false
+}
 
 export type AgentStatusGroup = 'needs-you' | 'working' | 'done' | 'idle'
 
@@ -94,8 +123,11 @@ export function hostAgents(input: AgentListInput, hostId: string): HostAgents {
   const rowKey = (server: string | undefined, paneKey: string) =>
     agentListRowKey(hostId, server ? `${server}:${paneKey}` : paneKey)
   const pending = (key: string) => input.pendingActivity?.[key]
-  // Only what the desktop lists, less what the phone just cleared; a cleared agent's workers stay, as roots.
+  // Keep Bot Team chats and dispatched orchestration workers out of global single-chat agent lists.
   const entries = (liveAgents ?? info?.lastSeenAgents ?? info?.agents ?? []).filter((entry) => {
+    if (isTeamOrWorkerAgentEntry(entry, info)) {
+      return false
+    }
     const change = pending(rowKey(entry.executionHost?.id, entry.agent.paneKey))
     return entry.agent.activity?.listed !== false && !(change && 'cleared' in change)
   })

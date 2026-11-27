@@ -1,8 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAllHostDescriptors } from '../../host-descriptors/host-descriptor-store'
 import { newWorkspaceOverlayHref } from '../../new-workspace/new-workspace-overlay-route'
 import type { MobileHomeData } from '../use-mobile-home-data'
-import { CLASSIC_HOME_TABS, FOUR_ZONE_HOME_TABS, type HomeTabId } from './home-tabs'
+import {
+  CLASSIC_HOME_TABS,
+  FOUR_ZONE_HOME_TABS,
+  type FourZoneHomeTabId,
+  type HomeTabId
+} from './home-tabs'
 import {
   countBotRowsNeedsYou,
   countNeedsYouForHostIds,
@@ -16,10 +21,19 @@ import {
   type MobileHomeLayoutMode,
   type MobileProjectsPlatform
 } from './mobile-four-zone'
+import {
+  loadMobileFourZoneTabOrder,
+  normalizeMobileFourZoneTabOrder,
+  saveMobileFourZoneTabOrder
+} from './mobile-tab-order'
 
 export function useMobileFourZoneHome(data: MobileHomeData) {
   const [layoutMode, setLayoutMode] = useState<MobileHomeLayoutMode>(DEFAULT_MOBILE_HOME_LAYOUT)
+  const [fourZoneTabOrder, setFourZoneTabOrder] = useState<FourZoneHomeTabId[]>([
+    ...FOUR_ZONE_HOME_TABS
+  ])
   const [tab, setTab] = useState<HomeTabId>('teams')
+  const userPickedTabRef = useRef(false)
   const [projectsPlatform, setProjectsPlatform] = useState<MobileProjectsPlatform>('win')
   const [platformLoaded, setPlatformLoaded] = useState(false)
   const [visitedTabs, setVisitedTabs] = useState<ReadonlySet<HomeTabId>>(
@@ -28,20 +42,25 @@ export function useMobileFourZoneHome(data: MobileHomeData) {
   const hostDescriptors = useAllHostDescriptors()
 
   const activeTabs: readonly HomeTabId[] =
-    layoutMode === 'four-zone' ? FOUR_ZONE_HOME_TABS : CLASSIC_HOME_TABS
-  const defaultTab: HomeTabId = layoutMode === 'four-zone' ? 'teams' : 'feed'
+    layoutMode === 'four-zone' ? fourZoneTabOrder : CLASSIC_HOME_TABS
+  const defaultTab: HomeTabId = layoutMode === 'four-zone' ? fourZoneTabOrder[0]! : 'feed'
 
   useEffect(() => {
     let active = true
-    void loadMobileHomeLayoutMode().then((storedMode) => {
-      if (!active || storedMode === DEFAULT_MOBILE_HOME_LAYOUT) {
-        return
+    void Promise.all([loadMobileHomeLayoutMode(), loadMobileFourZoneTabOrder()]).then(
+      ([storedMode, storedOrder]) => {
+        if (!active) {
+          return
+        }
+        setFourZoneTabOrder(storedOrder)
+        setLayoutMode(storedMode)
+        if (!userPickedTabRef.current) {
+          const firstTab: HomeTabId = storedMode === 'four-zone' ? storedOrder[0]! : 'feed'
+          setTab(firstTab)
+          setVisitedTabs((prev) => (prev.has(firstTab) ? prev : new Set([...prev, firstTab])))
+        }
       }
-      setLayoutMode(storedMode)
-      const firstTab: HomeTabId = storedMode === 'four-zone' ? 'teams' : 'feed'
-      setTab(firstTab)
-      setVisitedTabs((prev) => (prev.has(firstTab) ? prev : new Set([...prev, firstTab])))
-    })
+    )
     void loadMobileProjectsPlatform().then((storedPlatform) => {
       if (!active) {
         return
@@ -57,8 +76,21 @@ export function useMobileFourZoneHome(data: MobileHomeData) {
   }, [])
 
   const selectTab = useCallback((next: HomeTabId) => {
+    userPickedTabRef.current = true
     setTab(next)
     setVisitedTabs((visited) => (visited.has(next) ? visited : new Set([...visited, next])))
+  }, [])
+
+  const reorderFourZoneTabs = useCallback((next: readonly FourZoneHomeTabId[]) => {
+    const normalized = normalizeMobileFourZoneTabOrder(next)
+    setFourZoneTabOrder(normalized)
+    void saveMobileFourZoneTabOrder(normalized)
+  }, [])
+
+  const resetFourZoneTabOrder = useCallback(() => {
+    const defaults = [...FOUR_ZONE_HOME_TABS]
+    setFourZoneTabOrder(defaults)
+    void saveMobileFourZoneTabOrder(defaults)
   }, [])
 
   const selectProjectsPlatform = useCallback((next: MobileProjectsPlatform) => {
@@ -70,12 +102,12 @@ export function useMobileFourZoneHome(data: MobileHomeData) {
     setLayoutMode((prev) => {
       const next: MobileHomeLayoutMode = prev === 'four-zone' ? 'classic' : 'four-zone'
       void saveMobileHomeLayoutMode(next)
-      const nextTab: HomeTabId = next === 'four-zone' ? 'teams' : 'feed'
+      const nextTab: HomeTabId = next === 'four-zone' ? fourZoneTabOrder[0]! : 'feed'
       setTab(nextTab)
       setVisitedTabs((visited) => (visited.has(nextTab) ? visited : new Set([...visited, nextTab])))
       return next
     })
-  }, [])
+  }, [fourZoneTabOrder])
 
   const partitionedCatalog = useMemo(
     () => partitionMobileHostsByPlatform(data.sortedHostCatalog, hostDescriptors),
@@ -191,6 +223,9 @@ export function useMobileFourZoneHome(data: MobileHomeData) {
 
   return {
     layoutMode,
+    fourZoneTabOrder,
+    reorderFourZoneTabs,
+    resetFourZoneTabOrder,
     activeTabs,
     defaultTab,
     tab,

@@ -16,6 +16,15 @@ import {
   resolvePlatformConnectionHealth
 } from './mobile-four-zone'
 import { FOUR_ZONE_HOME_TABS } from './home-tabs'
+import {
+  moveMobileTabByOffset,
+  moveMobileTabToFirst,
+  normalizeMobileFourZoneTabOrder
+} from './mobile-tab-order'
+import {
+  buildMobileCodexProjectsModel,
+  formatMobileRelativeTime
+} from './mobile-codex-projects'
 import type { HostCatalogEntry } from '../../host-catalog/host-profile'
 import type { HostMachineDescriptor } from '../../host-descriptors/host-descriptor-store'
 import type { HostWorktreeInfo } from '../../worktree/catalog/home-worktree-info'
@@ -172,5 +181,162 @@ describe('mobile-four-zone', () => {
     expect(groups[0]?.items.map((i) => i.row.displayName)).toEqual(['active-wt'])
     expect(groups[1]?.items.map((i) => i.row.displayName)).toEqual(['idle-wt'])
     expect(countPlatformProjectItems(groups)).toBe(2)
+  })
+
+  it('normalizes and reorders customizable mobile four-zone bottom tabs', () => {
+    expect(normalizeMobileFourZoneTabOrder(['projects', 'teams', 'projects', 'bad'])).toEqual([
+      'projects',
+      'teams',
+      'bots',
+      'usage'
+    ])
+    expect(moveMobileTabToFirst(FOUR_ZONE_HOME_TABS, 'projects')).toEqual([
+      'projects',
+      'teams',
+      'bots',
+      'usage'
+    ])
+    expect(moveMobileTabByOffset(FOUR_ZONE_HOME_TABS, 'bots', -1)).toEqual([
+      'bots',
+      'teams',
+      'projects',
+      'usage'
+    ])
+    expect(moveMobileTabByOffset(FOUR_ZONE_HOME_TABS, 'usage', 1)).toEqual([
+      'teams',
+      'bots',
+      'projects',
+      'usage'
+    ])
+  })
+
+  it('builds Mobile Codex Projects + Recent model while excluding Bot Team chats and orchestration workers', () => {
+    const winHost = { id: 'win-1', name: 'DESKTOP-WIN' } as HostCatalogEntry
+    const rows = [
+      {
+        worktreeId: 'wt-main',
+        repoId: 'r-1',
+        repo: 'fengshen-github',
+        displayName: 'main',
+        branch: 'refs/heads/main',
+        status: 'working',
+        liveTerminalCount: 1,
+        lastActivityAt: 5000,
+        createdAt: 1000
+      },
+      {
+        worktreeId: 'wt-worker',
+        repoId: 'r-1',
+        repo: 'fengshen-github',
+        displayName: 'fengshen-github-explore',
+        branch: 'refs/heads/explore',
+        bot: 'bot-1',
+        status: 'working',
+        liveTerminalCount: 1,
+        lastActivityAt: 9000,
+        createdAt: 2000
+      },
+      {
+        worktreeId: 'wt-orch',
+        repoId: 'r-1',
+        repo: 'fengshen-github',
+        displayName: 'orch-worker',
+        branch: 'refs/heads/orch',
+        status: 'working',
+        liveTerminalCount: 1,
+        lastActivityAt: 9500,
+        createdAt: 2500
+      }
+    ] as unknown as Worktree[]
+
+    const agents = [
+      {
+        worktreeId: 'wt-main',
+        workspaceName: 'main',
+        repo: 'fengshen-github',
+        branch: 'main',
+        agent: {
+          paneKey: 'tab-user:leaf-1',
+          parentPaneKey: null,
+          state: 'working',
+          prompt: '优化侧边栏',
+          taskTitle: '优化侧边栏',
+          displayName: null,
+          stateStartedAt: 6000,
+          updatedAt: 6000
+        }
+      },
+      {
+        worktreeId: 'wt-main',
+        workspaceName: 'main',
+        repo: 'fengshen-github',
+        branch: 'main',
+        agent: {
+          paneKey: 'structured-agent-session-bot-group-member-1:bot-group-member-1',
+          orcaSessionId: 'bot-group-member-1',
+          parentPaneKey: null,
+          state: 'working',
+          prompt: '团队群聊发言',
+          taskTitle: '团队群聊发言',
+          displayName: null,
+          stateStartedAt: 8000,
+          updatedAt: 8000
+        }
+      },
+      {
+        worktreeId: 'wt-main',
+        workspaceName: 'main',
+        repo: 'fengshen-github',
+        branch: 'main',
+        agent: {
+          paneKey: 'tab-worker:leaf-2',
+          parentPaneKey: 'tab-coord:leaf-0',
+          state: 'working',
+          prompt: '你是风神项目的开发 Worker',
+          taskTitle: '你是风神项目的开发 Worker',
+          displayName: null,
+          stateStartedAt: 8500,
+          updatedAt: 8500
+        }
+      }
+    ] as unknown as HostWorktreeInfo['agents']
+
+    const worktreeInfo: Record<string, HostWorktreeInfo> = {
+      'win-1': {
+        hostId: 'win-1',
+        totalWorktrees: 3,
+        activeCount: 3,
+        rows,
+        agents,
+        workspaceLineage: {
+          'wt-orch': {
+            childWorkspaceKey: 'wt-orch',
+            parentWorkspaceKey: 'folder:group-1',
+            origin: 'orchestration',
+            capture: { source: 'orchestration-context', confidence: 'explicit' },
+            createdAt: 2500
+          }
+        }
+      }
+    }
+
+    const model = buildMobileCodexProjectsModel({
+      hosts: [winHost],
+      worktreeInfo,
+      hostStates: { 'win-1': 'connected' },
+      botHomeWorktreeIds: new Set(),
+      onlyActiveRecent: false,
+      now: 10_000
+    })
+
+    expect(model.projects).toHaveLength(1)
+    expect(model.projects[0]?.repo).toBe('fengshen-github')
+    expect(model.projects[0]?.items.map((i) => i.row.worktreeId)).toEqual(['wt-main'])
+    expect(model.projects[0]?.markIcon.type).toBe('letters')
+    expect(model.recentItems.map((r) => r.title)).toEqual(['优化侧边栏'])
+    const now = 1_700_000_000_000
+    expect(formatMobileRelativeTime(now - 10_000, now)).toBe('刚刚')
+    expect(formatMobileRelativeTime(now - 120_000, now)).toBe('2m')
+    expect(formatMobileRelativeTime(now - 7_200_000, now)).toBe('2h')
   })
 })

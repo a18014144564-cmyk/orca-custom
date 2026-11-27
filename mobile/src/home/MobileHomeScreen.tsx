@@ -46,6 +46,8 @@ import { MobileHomeFab } from './tabs/MobileHomeFab'
 import { MobileHomeFeedTab } from './tabs/MobileHomeFeedTab'
 import { MobileHomeTabBar } from './tabs/MobileHomeTabBar'
 import { MobileHomeUsageTab } from './tabs/MobileHomeUsageTab'
+import { FOUR_ZONE_HOME_TABS, type FourZoneHomeTabId, type HomeTabId } from './tabs/home-tabs'
+import { MobileTabOrderSheet } from './tabs/MobileTabOrderSheet'
 
 // The floating button's height plus its gap above the tab bar.
 const FAB_CLEARANCE = 56 + spacing.lg
@@ -66,17 +68,17 @@ export function MobileHomeScreen() {
   const forceReconnectHost = useForceReconnect()
   const [actionTarget, setActionTarget] = useState<HostProfile | null>(null)
   const [confirmRemove, setConfirmRemove] = useState<{ id: string; name: string } | null>(null)
+  const [reorderTabTarget, setReorderTabTarget] = useState<FourZoneHomeTabId | null>(null)
   const zone = useMobileFourZoneHome(data)
-  const { layoutMode, activeTabs, defaultTab, tab, visitedTabs, selectTab, toggleLayoutMode } = zone
+  const {
+    layoutMode, fourZoneTabOrder, reorderFourZoneTabs, resetFourZoneTabOrder,
+    activeTabs, defaultTab, tab, visitedTabs, selectTab, toggleLayoutMode
+  } = zone
   const [automationsHostId, setAutomationsHostId] = useState<string | null>(null)
   const [newBotOpen, setNewBotOpen] = useState(false)
   const openBotHome = useOpenBotHome({ standalone: true })
   const [tabBarHeight, setTabBarHeight] = useState(0)
-  const agentActions = useAgentListRowActions(
-    tabBarHeight,
-    data.sortedHosts,
-    data.applyAgentActivity
-  )
+  const agentActions = useAgentListRowActions(tabBarHeight, data.sortedHosts, data.applyAgentActivity)
 
   // Android Back from another tab returns to the primary tab before it leaves the app.
   useFocusEffect(
@@ -193,15 +195,7 @@ export function MobileHomeScreen() {
   const actionTargetConnected =
     actionTarget != null && data.hostStates[actionTarget.id] === 'connected'
 
-  const {
-    projectsPlatform,
-    selectProjectsPlatform,
-    partitionedCatalog,
-    teamsBadge,
-    soloBotsBadge,
-    projectsBadge,
-    resolveHomeFab
-  } = zone
+  const { projectsPlatform, selectProjectsPlatform, partitionedCatalog, teamsBadge, soloBotsBadge, projectsBadge, resolveHomeFab } = zone
 
   const automationsHostConnected =
     automationsHostId != null && data.hostStates[automationsHostId] === 'connected'
@@ -257,6 +251,7 @@ export function MobileHomeScreen() {
                     onOpenHost={openHost}
                     onOpenHostActions={openHostActions}
                     onOpenWorktree={openWorktree}
+                    onOpenAgent={agentActions.handlers.onOpen}
                     onPairDesktop={pairDesktop}
                     onOpenSettings={openSettings}
                     onToggleClassicLayout={toggleLayoutMode}
@@ -344,26 +339,33 @@ export function MobileHomeScreen() {
             teamsBadge={teamsBadge}
             projectsBadge={projectsBadge}
             onSelect={selectTab}
+            onLongPressTab={
+              layoutMode === 'four-zone'
+                ? (target: HomeTabId) => {
+                    if ((FOUR_ZONE_HOME_TABS as readonly string[]).includes(target)) {
+                      triggerMediumImpact()
+                      setReorderTabTarget(target as FourZoneHomeTabId)
+                    }
+                  }
+                : undefined
+            }
           />
         </View>
         {agentActions.sheet}
-        <HomeNewBotSheet
-          visible={newBotOpen}
-          bots={bots}
-          clientOf={clientOf}
-          onClose={() => setNewBotOpen(false)}
+        <MobileTabOrderSheet
+          target={reorderTabTarget}
+          order={fourZoneTabOrder}
+          onReorder={reorderFourZoneTabs}
+          onReset={resetFourZoneTabOrder}
+          onClose={() => setReorderTabTarget(null)}
         />
+        <HomeNewBotSheet visible={newBotOpen} bots={bots} clientOf={clientOf} onClose={() => setNewBotOpen(false)} />
         <ActionSheetModal
           visible={actionTarget != null}
           title={actionTarget?.name}
           message={
             actionTarget
-              ? [
-                  actionTargetConnected && actionTargetPath
-                    ? mobileConnectionPathLabel(actionTargetPath)
-                    : null,
-                  hostEndpointLabel(actionTarget.endpoint)
-                ]
+              ? [actionTargetConnected && actionTargetPath ? mobileConnectionPathLabel(actionTargetPath) : null, hostEndpointLabel(actionTarget.endpoint)]
                   .filter(Boolean)
                   .join(' · ')
               : undefined
@@ -371,20 +373,13 @@ export function MobileHomeScreen() {
           actions={getHostListActionSheetActions({
             host: actionTarget,
             state: actionTarget
-              ? resolveHomeHostConnectionState(
-                  actionTarget.id,
-                  data.hostStates[actionTarget.id],
-                  data.autoConnectHostIds
-                )
+              ? resolveHomeHostConnectionState(actionTarget.id, data.hostStates[actionTarget.id], data.autoConnectHostIds)
               : 'disconnected',
-            hasEverConnected: actionTarget
-              ? (data.hostLastConnected[actionTarget.id] ?? null) != null
-              : false,
+            hasEverConnected: actionTarget ? (data.hostLastConnected[actionTarget.id] ?? null) != null : false,
             onDismiss: () => setActionTarget(null),
             onReconnect: (hostId) => void forceReconnectHost?.(hostId),
             onDisconnect: disconnectHostClient,
-            onDiagnostics: (hostId) =>
-              data.router.push({ pathname: '/connection-log', params: { hostId } }),
+            onDiagnostics: (hostId) => data.router.push({ pathname: '/connection-log', params: { hostId } }),
             onEdit: openMobileHostEdit,
             onRemove: (host) => setConfirmRemove(host)
           })}

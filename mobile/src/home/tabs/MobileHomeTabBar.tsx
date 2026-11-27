@@ -48,6 +48,7 @@ export function MobileHomeTabBar(props: {
   /** Combined Win + Mac hosts' Needs you items; shown on Projects. */
   projectsBadge?: number
   onSelect: (tab: HomeTabId) => void
+  onLongPressTab?: (tab: HomeTabId) => void
 }) {
   const t = useMobileTranslation()
   useMobileColorScheme()
@@ -81,6 +82,7 @@ export function MobileHomeTabBar(props: {
           selected={tab === props.active}
           badge={badges[tab] ?? 0}
           onPress={() => props.onSelect(tab)}
+          onLongPress={props.onLongPressTab ? () => props.onLongPressTab!(tab) : undefined}
         />
       ))}
     </View>
@@ -93,6 +95,7 @@ function TabButton(props: {
   selected: boolean
   badge: number
   onPress: () => void
+  onLongPress?: () => void
 }) {
   useMobileColorScheme()
   const [pressed, setPressed] = useState(false)
@@ -107,6 +110,7 @@ function TabButton(props: {
       onPressIn={() => setPressed(true)}
       onPressOut={() => setPressed(false)}
       onPress={props.onPress}
+      onLongPress={props.onLongPress}
     >
       {/* Press feedback on the glyph only, so the label never jitters. */}
       <Animated.View

@@ -1,16 +1,18 @@
 import {
+  ChevronDown,
   ChevronRight,
   FolderGit2,
-  GitBranch,
   Laptop,
   LayoutGrid,
   Monitor,
   Plus,
-  Settings
+  Settings,
+  SlidersHorizontal
 } from 'lucide-react-native'
-import { useMemo } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
+import type { AgentListRow } from '../../agents/agent-list-rows'
 import type { HostCatalogEntry } from '../../host-catalog/host-profile'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useResponsiveLayout } from '../../layout/responsive-layout'
@@ -18,32 +20,23 @@ import { colors } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { Worktree } from '../../worktree/workspace-list/workspace-list-types'
 import { homeListStyles } from '../home-list-styles'
-import { MobileHomeSectionHeading } from '../MobileHomeSectionHeading'
 import type { MobileHomeData } from '../use-mobile-home-data'
+import { buildMobileCodexProjectsModel, type MobileCodexRecentRow } from './mobile-codex-projects'
 import {
-  buildPlatformProjectGroups,
   collectBotHomeWorktreeIds,
-  countPlatformProjectItems,
   resolvePlatformConnectionHealth,
   type MobileProjectsPlatform,
-  type PlatformConnectionHealth,
-  type PlatformProjectItem
+  type PlatformConnectionHealth
 } from './mobile-four-zone'
 import { mobileHomeProjectsStyles as styles } from './mobile-home-projects-styles'
+import { MobileCodexProjectRowView, MobileCodexRecentRowView } from './MobileHomeProjectsRows'
 import { MobileHomeTabEmpty } from './MobileHomeTabEmpty'
 import { MobileHomeTabHeader, MobileHomeTabHeaderButton } from './MobileHomeTabHeader'
 
 const SWIPE_THRESHOLD_PX = 42
+const INITIAL_RECENT_LIMIT = 16
 
-function cleanBranchName(branch: string | null | undefined): string | null {
-  if (!branch) {
-    return null
-  }
-  const trimmed = branch.replace(/^refs\/heads\//, '').trim()
-  return trimmed.length > 0 ? trimmed : null
-}
-
-/** 4-zone merged Projects tab: swipe/tap between Win and Mac project lists with compact green/red status dots. */
+/** 4-zone merged Projects tab: swipe/tap between Win and Mac in Codex x Orca hybrid layout. */
 export function MobileHomeProjectsTab(props: {
   platform: MobileProjectsPlatform
   onSelectPlatform: (platform: MobileProjectsPlatform) => void
@@ -54,6 +47,7 @@ export function MobileHomeProjectsTab(props: {
   onOpenHost: (host: HostCatalogEntry) => void
   onOpenHostActions: (host: HostCatalogEntry) => void
   onOpenWorktree: (host: HostCatalogEntry, row: Worktree) => void
+  onOpenAgent: (row: AgentListRow) => void
   onPairDesktop: () => void
   onOpenSettings: () => void
   onToggleClassicLayout: () => void
@@ -63,28 +57,37 @@ export function MobileHomeProjectsTab(props: {
   const { isWideLayout, contentMaxWidth } = useResponsiveLayout()
   const { data, platform, winHosts, macHosts, onSelectPlatform } = props
 
+  const [expandedProjects, setExpandedProjects] = useState<ReadonlySet<string>>(() => new Set())
+  const [recentCollapsed, setRecentCollapsed] = useState(false)
+  const [onlyActiveRecent, setOnlyActiveRecent] = useState(false)
+  const [showAllRecent, setShowAllRecent] = useState(false)
+
   const botHomeWorktreeIds = useMemo(
     () => collectBotHomeWorktreeIds(data.bots.rows),
     [data.bots.rows]
   )
 
-  const winGroups = useMemo(
+  const winModel = useMemo(
     () =>
-      buildPlatformProjectGroups({
+      buildMobileCodexProjectsModel({
         hosts: winHosts,
         worktreeInfo: data.worktreeInfo,
-        botHomeWorktreeIds
+        hostStates: data.hostStates,
+        botHomeWorktreeIds,
+        onlyActiveRecent
       }),
-    [botHomeWorktreeIds, data.worktreeInfo, winHosts]
+    [botHomeWorktreeIds, data.hostStates, data.worktreeInfo, onlyActiveRecent, winHosts]
   )
-  const macGroups = useMemo(
+  const macModel = useMemo(
     () =>
-      buildPlatformProjectGroups({
+      buildMobileCodexProjectsModel({
         hosts: macHosts,
         worktreeInfo: data.worktreeInfo,
-        botHomeWorktreeIds
+        hostStates: data.hostStates,
+        botHomeWorktreeIds,
+        onlyActiveRecent
       }),
-    [botHomeWorktreeIds, data.worktreeInfo, macHosts]
+    [botHomeWorktreeIds, data.hostStates, data.worktreeInfo, onlyActiveRecent, macHosts]
   )
 
   const winHealth = useMemo(
@@ -96,15 +99,39 @@ export function MobileHomeProjectsTab(props: {
     [data.hostStates, macHosts]
   )
 
-  const winCount = useMemo(() => countPlatformProjectItems(winGroups), [winGroups])
-  const macCount = useMemo(() => countPlatformProjectItems(macGroups), [macGroups])
-
   const isWin = platform === 'win'
   const currentHosts = isWin ? winHosts : macHosts
-  const currentGroups = isWin ? winGroups : macGroups
+  const currentModel = isWin ? winModel : macModel
   const multiHost = currentHosts.length > 1
-  const currentConnecting = currentHosts.some(
-    (host) => data.hostStates[host.id] === 'connecting'
+  const currentConnecting = currentHosts.some((host) => data.hostStates[host.id] === 'connecting')
+  const anyExpandable = useMemo(
+    () => currentModel.projects.some((project) => project.items.length > 1),
+    [currentModel.projects]
+  )
+
+  const toggleProjectExpanded = useCallback((projectKey: string) => {
+    setExpandedProjects((prev) => {
+      const next = new Set(prev)
+      if (next.has(projectKey)) {
+        next.delete(projectKey)
+      } else {
+        next.add(projectKey)
+      }
+      return next
+    })
+  }, [])
+
+  const handlePressRecent = useCallback(
+    (item: MobileCodexRecentRow) => {
+      if (item.agentRow) {
+        props.onOpenAgent(item.agentRow)
+        return
+      }
+      if (item.row) {
+        props.onOpenWorktree(item.host, item.row)
+      }
+    },
+    [props]
   )
 
   const swipeGesture = useMemo(
@@ -162,7 +189,7 @@ export function MobileHomeProjectsTab(props: {
       <View style={styles.switcherTrack} accessibilityRole="tablist">
         <PlatformSegmentButton
           label="Win"
-          count={winCount}
+          count={winModel.projects.length}
           health={winHealth}
           selected={isWin}
           onPress={() => onSelectPlatform('win')}
@@ -170,7 +197,7 @@ export function MobileHomeProjectsTab(props: {
         />
         <PlatformSegmentButton
           label="Mac"
-          count={macCount}
+          count={macModel.projects.length}
           health={macHealth}
           selected={!isWin}
           onPress={() => onSelectPlatform('mac')}
@@ -189,6 +216,11 @@ export function MobileHomeProjectsTab(props: {
     )
   }
 
+  const visibleRecent = showAllRecent
+    ? currentModel.recentItems
+    : currentModel.recentItems.slice(0, INITIAL_RECENT_LIMIT)
+  const hiddenRecentCount = currentModel.recentItems.length - visibleRecent.length
+
   const body =
     currentHosts.length === 0 ? (
       <View style={styles.emptyWrap}>
@@ -197,8 +229,8 @@ export function MobileHomeProjectsTab(props: {
           title={isWin ? '暂无 Windows 主机' : '暂无 Mac 主机'}
           message={
             isWin
-              ? '配对 Windows 电脑后，这里将直接展示它的项目列表。'
-              : '配对 Mac 电脑后，这里将直接展示它的项目列表。'
+              ? '配对 Windows 电脑后，这里将直接展示它的项目与单聊列表。'
+              : '配对 Mac 电脑后，这里将直接展示它的项目与单聊列表。'
           }
         />
         <Pressable
@@ -212,7 +244,7 @@ export function MobileHomeProjectsTab(props: {
           </Text>
         </Pressable>
       </View>
-    ) : currentGroups.length === 0 ? (
+    ) : currentModel.projects.length === 0 && currentModel.totalRecentCount === 0 ? (
       currentConnecting ? (
         <View style={styles.loadingWrap}>
           <ActivityIndicator size="small" color={colors.textSecondary} />
@@ -247,28 +279,84 @@ export function MobileHomeProjectsTab(props: {
           isWideLayout && { maxWidth: contentMaxWidth, width: '100%', alignSelf: 'center' }
         ]}
       >
-        {currentGroups.map((group, groupIndex) => {
-          const headingTitle = multiHost ? `${group.repo} · ${group.host.name}` : group.repo
-          return (
-            <View key={group.key}>
-              <MobileHomeSectionHeading
-                title={headingTitle}
-                count={group.items.length}
-                first={groupIndex === 0}
-              />
-              <View style={homeListStyles.group}>
-                {group.items.map((item, itemIndex) => (
-                  <ProjectWorktreeRow
+        <View style={[styles.sectionHeaderRow, styles.sectionHeaderFirst]}>
+          <Text style={styles.sectionHeaderTitle}>项目</Text>
+        </View>
+        <View style={homeListStyles.group}>
+          {currentModel.projects.map((project, index) => (
+            <MobileCodexProjectRowView
+              key={project.key}
+              project={project}
+              multiHost={multiHost}
+              anyExpandable={anyExpandable}
+              expanded={expandedProjects.has(project.key)}
+              separated={index > 0}
+              onToggleExpand={() => toggleProjectExpanded(project.key)}
+              onOpenWorktree={props.onOpenWorktree}
+            />
+          ))}
+        </View>
+
+        <View style={styles.sectionHeaderRow}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={recentCollapsed ? '展开最近对话' : '收起最近对话'}
+            onPress={() => setRecentCollapsed((prev) => !prev)}
+            style={styles.sectionHeaderToggle}
+          >
+            <Text style={styles.sectionHeaderTitle}>最近</Text>
+            {recentCollapsed ? (
+              <ChevronRight size={13} color={colors.textMuted} />
+            ) : (
+              <ChevronDown size={13} color={colors.textMuted} />
+            )}
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={onlyActiveRecent ? '显示全部最近对话' : '仅显示进行中的对话'}
+            accessibilityState={{ selected: onlyActiveRecent }}
+            onPress={() => setOnlyActiveRecent((prev) => !prev)}
+            style={[styles.filterButton, onlyActiveRecent && styles.filterButtonActive]}
+          >
+            <SlidersHorizontal
+              size={14}
+              color={onlyActiveRecent ? colors.textPrimary : colors.textMuted}
+            />
+          </Pressable>
+        </View>
+
+        {!recentCollapsed ? (
+          <View style={homeListStyles.group}>
+            {visibleRecent.length === 0 ? (
+              <Text style={styles.recentEmptyText}>
+                {onlyActiveRecent ? '当前没有进行中的单聊' : '暂无最近单聊'}
+              </Text>
+            ) : (
+              <>
+                {visibleRecent.map((item, index) => (
+                  <MobileCodexRecentRowView
                     key={item.key}
                     item={item}
-                    separated={itemIndex > 0}
-                    onPress={() => props.onOpenWorktree(item.host, item.row)}
+                    separated={index > 0}
+                    onPress={() => handlePressRecent(item)}
                   />
                 ))}
-              </View>
-            </View>
-          )
-        })}
+                {hiddenRecentCount > 0 ? (
+                  <>
+                    <View style={homeListStyles.separator} />
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={() => setShowAllRecent(true)}
+                      style={({ pressed }) => [styles.showMoreRow, pressed && styles.rowPressed]}
+                    >
+                      <Text style={styles.showMoreText}>展开其余 {hiddenRecentCount} 条…</Text>
+                    </Pressable>
+                  </>
+                ) : null}
+              </>
+            )}
+          </View>
+        ) : null}
       </ScrollView>
     )
 
@@ -321,80 +409,5 @@ function PlatformSegmentButton(props: {
         </View>
       ) : null}
     </Pressable>
-  )
-}
-
-function ProjectWorktreeRow(props: {
-  item: PlatformProjectItem
-  separated: boolean
-  onPress: () => void
-}) {
-  useMobileColorScheme()
-  const { item } = props
-  const { row } = item
-  const title = row.displayName?.trim() || row.repo
-  const branch = cleanBranchName(row.branch)
-  const prNumber = row.linkedPR?.number ?? null
-  const agentCount = Array.isArray(row.agents) ? row.agents.length : 0
-
-  const statusColor = item.working
-    ? colors.statusAmber
-    : item.active
-      ? colors.statusGreen
-      : colors.textMuted
-
-  const metaParts: string[] = []
-  if (branch && branch !== title) {
-    metaParts.push(branch)
-  }
-  if (prNumber != null) {
-    metaParts.push(`PR #${prNumber}`)
-  }
-  if (agentCount > 0) {
-    metaParts.push(`${agentCount} 对话`)
-  } else if (row.liveTerminalCount > 0) {
-    metaParts.push(`${row.liveTerminalCount} 终端`)
-  }
-  const subtitle = metaParts.join(' · ')
-
-  return (
-    <View>
-      {props.separated ? <View style={homeListStyles.separator} /> : null}
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={subtitle ? `${title}，${subtitle}` : title}
-        onPress={props.onPress}
-        style={({ pressed }) => [homeListStyles.row, pressed && homeListStyles.rowPressed]}
-      >
-        <View style={homeListStyles.status}>
-          <View
-            style={[
-              styles.rowStatusDot,
-              { backgroundColor: statusColor },
-              !item.active && !item.working && styles.rowStatusDotIdle
-            ]}
-          />
-        </View>
-        <View style={homeListStyles.text}>
-          <Text style={homeListStyles.title} numberOfLines={1}>
-            {title}
-          </Text>
-          {subtitle ? (
-            <View style={styles.metaRow}>
-              {branch && branch !== title ? (
-                <GitBranch size={12} color={colors.textMuted} style={styles.branchIcon} />
-              ) : null}
-              <Text style={homeListStyles.subtitle} numberOfLines={1}>
-                {subtitle}
-              </Text>
-            </View>
-          ) : null}
-        </View>
-        <View style={homeListStyles.trailing}>
-          {item.unread ? <View style={styles.unreadDot} /> : null}
-          <ChevronRight size={16} color={colors.textMuted} />
-        </View>
-      </Pressable>
-    </View>
   )
 }
