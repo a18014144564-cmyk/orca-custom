@@ -552,4 +552,132 @@ describe('mobile-four-zone', () => {
     expect(activeCount).toBe(1)
     expect(model.items.map((i) => i.title)).toEqual(['正常用户任务'])
   })
+
+  it('excludes team member bots working on team-dispatched tasks unless directly chatted 1-on-1', () => {
+    const now = 30_000_000
+    const winHost = { id: 'win-1', name: 'DESKTOP-P3UU2A1', credentialStatus: 'paired' } as unknown as Parameters<typeof buildMobileRunningWindows>[0]['hosts'][number]
+    const botRows = [
+      {
+        key: 'place-1\ngroup:team-1',
+        placeKey: 'place-1',
+        kind: 'group' as const,
+        pairedHostId: 'win-1',
+        hostLabel: 'DESKTOP-P3UU2A1',
+        title: '风神开发团队',
+        preview: '大明白: NO_REPLY',
+        needsYou: 0,
+        dot: 'working' as const,
+        activityAt: now - 10_000,
+        unread: false,
+        group: {
+          id: 'team-1',
+          members: [
+            { botId: 'bot-dev', sessionId: 'bot-group-member-dev' },
+            { botId: 'bot-pm', sessionId: 'bot-group-member-pm' }
+          ],
+          threads: []
+        }
+      },
+      {
+        key: 'place-1\nbot:bot-dev',
+        placeKey: 'place-1',
+        kind: 'bot' as const,
+        pairedHostId: 'win-1',
+        hostLabel: 'DESKTOP-P3UU2A1',
+        title: '风神开发手',
+        preview: '1 个工作中',
+        line: { kind: 'workingElsewhere' as const, count: 1 },
+        needsYou: 0,
+        dot: 'working' as const,
+        activityAt: now - 5_000,
+        unread: false,
+        bot: { id: 'bot-dev', name: '风神开发手', chatSessionId: 'chat-dev-direct' }
+      },
+      {
+        key: 'place-1\nbot:bot-pm',
+        placeKey: 'place-1',
+        kind: 'bot' as const,
+        pairedHostId: 'win-1',
+        hostLabel: 'DESKTOP-P3UU2A1',
+        title: '产品经理 Bot',
+        preview: '正在回复你的单聊',
+        line: { kind: 'activity' as const, place: null, text: '正在回复你的单聊', at: now - 2_000 },
+        needsYou: 0,
+        dot: 'working' as const,
+        activityAt: now - 2_000,
+        unread: false,
+        bot: { id: 'bot-pm', name: '产品经理 Bot', chatSessionId: 'chat-pm-direct' }
+      }
+    ] as unknown as HomeBotRow[]
+
+    const worktreeInfo: Record<string, HostWorktreeInfo> = {
+      'win-1': {
+        hostId: 'win-1',
+        totalWorktrees: 2,
+        activeCount: 2,
+        rows: [],
+        agents: [
+          {
+            worktreeId: 'folder:bot-dev',
+            workspaceName: '风神开发手',
+            repo: 'Bots',
+            branch: '',
+            agent: {
+              paneKey: 'structured-agent-session-bot-group-member-dev:bot-group-member-dev',
+              orcaSessionId: 'bot-group-member-dev',
+              parentPaneKey: null,
+              state: 'working',
+              prompt: '团队下发任务',
+              taskTitle: null,
+              displayName: null,
+              stateStartedAt: now - 5_000,
+              updatedAt: now - 5_000
+            }
+          },
+          {
+            worktreeId: 'folder:bot-pm',
+            workspaceName: '产品经理 Bot',
+            repo: 'Bots',
+            branch: '',
+            agent: {
+              paneKey: 'structured-agent-session-chat-pm-direct:chat-pm-direct',
+              orcaSessionId: 'chat-pm-direct',
+              parentPaneKey: null,
+              state: 'working',
+              prompt: '用户单聊需求',
+              taskTitle: null,
+              displayName: null,
+              stateStartedAt: now - 2_000,
+              updatedAt: now - 2_000
+            }
+          }
+        ] as unknown as HostWorktreeInfo['agents']
+      }
+    }
+
+    const activeCount = countActiveMobileRunningWindows({
+      hosts: [winHost],
+      hostStates: { 'win-1': 'connected' },
+      worktreeInfo,
+      botRows,
+      botHomeWorktreeIds: new Set(['folder:bot-dev', 'folder:bot-pm']),
+      now
+    })
+    const model = buildMobileRunningWindows({
+      hosts: [winHost],
+      winHostIds: new Set(['win-1']),
+      macHostIds: new Set(),
+      hostStates: { 'win-1': 'connected' },
+      worktreeInfo,
+      botRows,
+      botHomeWorktreeIds: new Set(['folder:bot-dev', 'folder:bot-pm']),
+      prefs: { idleHideMs: 30 * 60_000, groupByDevice: false, dismissedAtByKey: {} },
+      now
+    })
+
+    // 风神开发手 is working only via team dispatch (no 1-on-1 direct chat) -> excluded!
+    // 风神开发团队 (the team itself) + 产品经理 Bot (active 1-on-1 direct chat) -> included!
+    expect(activeCount).toBe(2)
+    expect(model.items.map((i) => i.title)).toEqual(['产品经理 Bot', '风神开发团队'])
+  })
 })
