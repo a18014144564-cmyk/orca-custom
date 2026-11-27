@@ -1,13 +1,15 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useSyncExternalStore } from 'react'
+import type { MobileCodexProjectRow, MobileCodexTone } from './mobile-codex-projects'
 
-const STORAGE_KEY = 'orca.custom.mobileCodexCollapseState.v1'
+const STORAGE_KEY = 'orca.custom.mobileCodexCollapseState.v2'
 
 export type MobileCodexViewMode = 'tree' | 'recent'
 
 export type MobileCodexCollapseState = Readonly<{
   collapsedHosts: ReadonlySet<string>
-  collapsedProjects: ReadonlySet<string>
+  /** Explicit per-project expand overrides; omitted keys expand only when a task is currently running. */
+  projectExpandOverrides: Readonly<Record<string, boolean>>
   viewMode: MobileCodexViewMode
   onlyActive: boolean
 }>
@@ -17,9 +19,32 @@ let hydrated = false
 
 let currentState: MobileCodexCollapseState = {
   collapsedHosts: new Set(),
-  collapsedProjects: new Set(),
+  projectExpandOverrides: {},
   viewMode: 'tree',
   onlyActive: false
+}
+
+export function isMobileCodexRunningTone(tone: MobileCodexTone): boolean {
+  return tone === 'working' || tone === 'attention'
+}
+
+export function mobileCodexProjectHasRunningTask(
+  project: Pick<MobileCodexProjectRow, 'statusTone' | 'threads'>
+): boolean {
+  return (
+    isMobileCodexRunningTone(project.statusTone) ||
+    project.threads.some((thread) => isMobileCodexRunningTone(thread.statusTone))
+  )
+}
+
+export function resolveMobileCodexProjectExpanded(
+  project: Pick<MobileCodexProjectRow, 'key' | 'statusTone' | 'threads'>,
+  overrides: Readonly<Record<string, boolean>>
+): boolean {
+  if (Object.hasOwn(overrides, project.key)) {
+    return overrides[project.key] === true
+  }
+  return mobileCodexProjectHasRunningTask(project)
 }
 
 function toStringSet(value: unknown): ReadonlySet<string> {
@@ -30,6 +55,19 @@ function toStringSet(value: unknown): ReadonlySet<string> {
   for (const item of value) {
     if (typeof item === 'string' && item.length > 0) {
       next.add(item)
+    }
+  }
+  return next
+}
+
+function toBooleanMap(value: unknown): Readonly<Record<string, boolean>> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {}
+  }
+  const next: Record<string, boolean> = {}
+  for (const [key, flag] of Object.entries(value as Record<string, unknown>)) {
+    if (key.length > 0 && typeof flag === 'boolean') {
+      next[key] = flag
     }
   }
   return next
@@ -53,7 +91,7 @@ function hydrateOnce(): void {
       }
       const parsed = JSON.parse(raw) as {
         collapsedHosts?: unknown
-        collapsedProjects?: unknown
+        projectExpandOverrides?: unknown
         viewMode?: unknown
         onlyActive?: unknown
       } | null
@@ -62,7 +100,7 @@ function hydrateOnce(): void {
       }
       currentState = {
         collapsedHosts: toStringSet(parsed.collapsedHosts),
-        collapsedProjects: toStringSet(parsed.collapsedProjects),
+        projectExpandOverrides: toBooleanMap(parsed.projectExpandOverrides),
         viewMode: parsed.viewMode === 'recent' ? 'recent' : 'tree',
         onlyActive: parsed.onlyActive === true
       }
@@ -78,7 +116,7 @@ function commitState(next: MobileCodexCollapseState): void {
     STORAGE_KEY,
     JSON.stringify({
       collapsedHosts: [...next.collapsedHosts],
-      collapsedProjects: [...next.collapsedProjects],
+      projectExpandOverrides: next.projectExpandOverrides,
       viewMode: next.viewMode,
       onlyActive: next.onlyActive
     })
@@ -99,31 +137,33 @@ export function toggleMobileCodexHostCollapsed(hostId: string): void {
   commitState({ ...currentState, collapsedHosts: toggleInSet(currentState.collapsedHosts, hostId) })
 }
 
-export function toggleMobileCodexProjectCollapsed(projectKey: string): void {
+export function toggleMobileCodexProjectExpanded(
+  projectKey: string,
+  currentlyExpanded: boolean
+): void {
   commitState({
     ...currentState,
-    collapsedProjects: toggleInSet(currentState.collapsedProjects, projectKey)
+    projectExpandOverrides: {
+      ...currentState.projectExpandOverrides,
+      [projectKey]: !currentlyExpanded
+    }
   })
 }
 
-export function setMobileCodexAllProjectsCollapsed(
+export function setMobileCodexAllProjectsExpanded(
   projectKeys: readonly string[],
-  collapse: boolean
+  expanded: boolean
 ): void {
-  const next = new Set(currentState.collapsedProjects)
+  const next: Record<string, boolean> = { ...currentState.projectExpandOverrides }
   let changed = false
   for (const key of projectKeys) {
-    if (collapse) {
-      if (!next.has(key)) {
-        next.add(key)
-        changed = true
-      }
-    } else if (next.delete(key)) {
+    if (next[key] !== expanded) {
+      next[key] = expanded
       changed = true
     }
   }
   if (changed) {
-    commitState({ ...currentState, collapsedProjects: next })
+    commitState({ ...currentState, projectExpandOverrides: next })
   }
 }
 

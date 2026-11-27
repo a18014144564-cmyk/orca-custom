@@ -15,10 +15,11 @@ import {
 } from './sidebar-codex-thread-archive'
 import {
   ensureCodexExpanded,
-  setCodexAllProjectsCollapsed,
+  resolveCodexProjectExpanded,
+  setCodexAllProjectsExpanded,
   toggleCodexBotHostCollapsed,
   toggleCodexHostCollapsed,
-  toggleCodexProjectCollapsed
+  toggleCodexProjectExpanded
 } from './sidebar-codex-collapse-state'
 import { botOwnChatTree, type BotChatTreeChat, type BotChatTreeWorker } from '../../../../../shared/bots/bot-chat-tree'
 import { botChatSearchHits } from '../../../../../shared/bots/bot-chat-tree-view'
@@ -535,13 +536,57 @@ describe('buildCodexSidebarModel', () => {
     expect(model.projects[0].threads[0].archivedSessionId).toBe('sess-recover')
   })
 
-  it('persists collapse toggles across hosts, projects, and bot hosts', () => {
+  it('defaults to expanding only projects with running tasks and sorts running-task windows first', () => {
+    const localHost = 'local' as ExecutionHostId
+    const repoIdle = makeRepo({ id: 'r-idle', displayName: '空闲项目', executionHostId: localHost })
+    const repoBusy = makeRepo({ id: 'r-busy', displayName: '运行项目', executionHostId: localHost })
+    const wtIdle = makeWorktree({ id: 'wt-idle', repoId: 'r-idle', hostId: localHost, lastActivityAt: 9000 })
+    const wtBusy = makeWorktree({ id: 'wt-busy', repoId: 'r-busy', hostId: localHost, lastActivityAt: 1000 })
+    const threadNewerIdle = makeThread({
+      paneKey: 't-idle:l1',
+      paneTitle: '已完成对话',
+      worktree: wtBusy,
+      repo: repoBusy,
+      state: null,
+      latestTimestamp: 8000
+    })
+    const threadRunning = makeThread({
+      paneKey: 't-run:l1',
+      paneTitle: '当前跑任务的窗口',
+      worktree: wtBusy,
+      repo: repoBusy,
+      state: 'working',
+      latestTimestamp: 2000
+    })
+    const model = buildCodexSidebarModel({
+      repos: [repoIdle, repoBusy],
+      worktreesByRepo: { 'r-idle': [wtIdle], 'r-busy': [wtBusy] },
+      folderWorkspaces: [],
+      botHomeOwners: [],
+      allThreads: [threadNewerIdle, threadRunning],
+      tabsByWorktree: {},
+      browserTabsByWorktree: {},
+      hostIds: [localHost],
+      defaultHostId: localHost,
+      activeWorktreeId: null,
+      selectedPaneKey: null,
+      onlyActiveRecent: false
+    })
+    // Running-task project bubbles to top and auto-expands; idle project stays collapsed by default.
+    expect(model.projects.map((p) => p.name)).toEqual(['运行项目', '空闲项目'])
+    expect(resolveCodexProjectExpanded(model.projects[0], {})).toBe(true)
+    expect(resolveCodexProjectExpanded(model.projects[1], {})).toBe(false)
+    // Inside the expanded project, the running-task window sorts above newer idle conversations.
+    expect(model.projects[0].threads.map((t) => t.title)).toEqual(['当前跑任务的窗口', '已完成对话'])
+    // Manual override beats smart default.
+    expect(resolveCodexProjectExpanded(model.projects[0], { [model.projects[0].key]: false })).toBe(false)
+    expect(resolveCodexProjectExpanded(model.projects[1], { [model.projects[1].key]: true })).toBe(true)
+
     toggleCodexHostCollapsed('runtime:mac-1')
-    toggleCodexProjectCollapsed('repo:r1:local')
+    toggleCodexProjectExpanded('repo:r1:local', false)
     toggleCodexBotHostCollapsed('runtime:win-1')
-    setCodexAllProjectsCollapsed(['repo:r2:local'], true)
+    setCodexAllProjectsExpanded(['repo:r2:local'], false)
     ensureCodexExpanded('runtime:mac-1', 'repo:r1:local')
-    setCodexAllProjectsCollapsed(['repo:r2:local'], false)
     toggleCodexBotHostCollapsed('runtime:win-1')
   })
 })

@@ -12,6 +12,7 @@ import {
   type MobileCodexRecentRow,
   type MobileCodexTone
 } from './mobile-codex-projects'
+import { resolveMobileCodexProjectExpanded } from './mobile-codex-collapse-state'
 import type { PlatformConnectionHealth } from './mobile-four-zone'
 import { mobileHomeProjectsStyles as styles } from './mobile-home-projects-styles'
 
@@ -222,10 +223,10 @@ export function MobileCodexHostGroupView(props: {
   online: boolean
   projects: readonly MobileCodexProjectRow[]
   collapsed: boolean
-  collapsedProjects: ReadonlySet<string>
+  projectExpandOverrides: Readonly<Record<string, boolean>>
   onlyActive: boolean
   onToggleHost: () => void
-  onToggleProject: (projectKey: string) => void
+  onToggleProject: (projectKey: string, currentlyExpanded: boolean) => void
   onOpenWorktree: (host: HostCatalogEntry, row: Worktree) => void
   onSelectThread: (item: MobileCodexRecentRow) => void
 }) {
@@ -255,19 +256,22 @@ export function MobileCodexHostGroupView(props: {
       </Pressable>
       {!props.collapsed ? (
         <View style={styles.hostGroupChildren}>
-          {props.projects.map((project, index) => (
-            <MobileCodexProjectRowView
-              key={project.key}
-              project={project}
-              multiHost={false}
-              expanded={!props.collapsedProjects.has(project.key)}
-              onlyActive={props.onlyActive}
-              separated={index > 0}
-              onToggleExpand={() => props.onToggleProject(project.key)}
-              onOpenWorktree={props.onOpenWorktree}
-              onSelectThread={props.onSelectThread}
-            />
-          ))}
+          {props.projects.map((project, index) => {
+            const expanded = resolveMobileCodexProjectExpanded(project, props.projectExpandOverrides)
+            return (
+              <MobileCodexProjectRowView
+                key={project.key}
+                project={project}
+                multiHost={false}
+                expanded={expanded}
+                onlyActive={props.onlyActive}
+                separated={index > 0}
+                onToggleExpand={() => props.onToggleProject(project.key, expanded)}
+                onOpenWorktree={props.onOpenWorktree}
+                onSelectThread={props.onSelectThread}
+              />
+            )
+          })}
         </View>
       ) : null}
     </View>

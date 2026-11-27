@@ -24,11 +24,12 @@ import type { Worktree } from '../../worktree/workspace-list/workspace-list-type
 import { homeListStyles } from '../home-list-styles'
 import type { MobileHomeData } from '../use-mobile-home-data'
 import {
-  setMobileCodexAllProjectsCollapsed,
+  resolveMobileCodexProjectExpanded,
+  setMobileCodexAllProjectsExpanded,
   setMobileCodexViewMode,
   toggleMobileCodexHostCollapsed,
   toggleMobileCodexOnlyActive,
-  toggleMobileCodexProjectCollapsed,
+  toggleMobileCodexProjectExpanded,
   useMobileCodexCollapseState
 } from './mobile-codex-collapse-state'
 import { buildMobileCodexProjectsModel, type MobileCodexProjectRow, type MobileCodexRecentRow } from './mobile-codex-projects'
@@ -66,7 +67,7 @@ export function MobileHomeProjectsTab(props: {
   const { isWideLayout, contentMaxWidth } = useResponsiveLayout()
   const { data, platform, winHosts, macHosts, onSelectPlatform } = props
 
-  const { viewMode, collapsedProjects, collapsedHosts, onlyActive } = useMobileCodexCollapseState()
+  const { viewMode, projectExpandOverrides, collapsedHosts, onlyActive } = useMobileCodexCollapseState()
   const [showAllRecent, setShowAllRecent] = useState(false)
 
   const botHomeWorktreeIds = useMemo(
@@ -103,12 +104,14 @@ export function MobileHomeProjectsTab(props: {
     () => (onlyActive ? currentModel.projects.filter(projectHasLiveActivity) : currentModel.projects),
     [currentModel.projects, onlyActive]
   )
-  const collapsibleProjectKeys = useMemo(
-    () => visibleProjects.filter((p) => p.threads.length > 0 || p.items.length > 1).map((p) => p.key),
+  const collapsibleProjects = useMemo(
+    () => visibleProjects.filter((p) => p.threads.length > 0 || p.items.length > 1),
     [visibleProjects]
   )
-  const allCollapsibleCollapsed =
-    collapsibleProjectKeys.length > 0 && collapsibleProjectKeys.every((key) => collapsedProjects.has(key))
+  const collapsibleProjectKeys = useMemo(() => collapsibleProjects.map((p) => p.key), [collapsibleProjects])
+  const anyCollapsibleExpanded = collapsibleProjects.some((p) =>
+    resolveMobileCodexProjectExpanded(p, projectExpandOverrides)
+  )
 
   const hostProjectGroups = useMemo(() => {
     if (!multiHost) { return null }
@@ -282,11 +285,11 @@ export function MobileHomeProjectsTab(props: {
             {viewMode === 'tree' && collapsibleProjectKeys.length > 0 ? (
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={allCollapsibleCollapsed ? '全部展开项目' : '全部折叠项目'}
-                onPress={() => setMobileCodexAllProjectsCollapsed(collapsibleProjectKeys, !allCollapsibleCollapsed)}
+                accessibilityLabel={anyCollapsibleExpanded ? '全部折叠项目' : '全部展开项目'}
+                onPress={() => setMobileCodexAllProjectsExpanded(collapsibleProjectKeys, !anyCollapsibleExpanded)}
                 style={styles.filterButton}
               >
-                {allCollapsibleCollapsed ? <ChevronsUpDown size={14} color={colors.textMuted} /> : <ChevronsDownUp size={14} color={colors.textMuted} />}
+                {anyCollapsibleExpanded ? <ChevronsDownUp size={14} color={colors.textMuted} /> : <ChevronsUpDown size={14} color={colors.textMuted} />}
               </Pressable>
             ) : null}
             <Pressable
@@ -323,10 +326,10 @@ export function MobileHomeProjectsTab(props: {
                   online={data.hostStates[host.id] === 'connected'}
                   projects={projects}
                   collapsed={collapsedHosts.has(host.id)}
-                  collapsedProjects={collapsedProjects}
+                  projectExpandOverrides={projectExpandOverrides}
                   onlyActive={onlyActive}
                   onToggleHost={() => toggleMobileCodexHostCollapsed(host.id)}
-                  onToggleProject={toggleMobileCodexProjectCollapsed}
+                  onToggleProject={toggleMobileCodexProjectExpanded}
                   onOpenWorktree={props.onOpenWorktree}
                   onSelectThread={handlePressRecent}
                 />
@@ -334,19 +337,22 @@ export function MobileHomeProjectsTab(props: {
             </View>
           ) : (
             <View style={homeListStyles.group}>
-              {visibleProjects.map((project, index) => (
-                <MobileCodexProjectRowView
-                  key={project.key}
-                  project={project}
-                  multiHost={false}
-                  expanded={!collapsedProjects.has(project.key)}
-                  onlyActive={onlyActive}
-                  separated={index > 0}
-                  onToggleExpand={() => toggleMobileCodexProjectCollapsed(project.key)}
-                  onOpenWorktree={props.onOpenWorktree}
-                  onSelectThread={handlePressRecent}
-                />
-              ))}
+              {visibleProjects.map((project, index) => {
+                const expanded = resolveMobileCodexProjectExpanded(project, projectExpandOverrides)
+                return (
+                  <MobileCodexProjectRowView
+                    key={project.key}
+                    project={project}
+                    multiHost={false}
+                    expanded={expanded}
+                    onlyActive={onlyActive}
+                    separated={index > 0}
+                    onToggleExpand={() => toggleMobileCodexProjectExpanded(project.key, expanded)}
+                    onOpenWorktree={props.onOpenWorktree}
+                    onSelectThread={handlePressRecent}
+                  />
+                )
+              })}
             </View>
           )
         ) : (

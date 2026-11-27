@@ -81,6 +81,29 @@ export function higherCodexTone(
   return CODEX_TONE_PRIORITY[left] >= CODEX_TONE_PRIORITY[right] ? left : right
 }
 
+export function codexTaskPriority(tone: CodexActivityTone): number {
+  return tone === 'working' ? 2 : tone === 'attention' ? 1 : 0
+}
+
+export function codexProjectTaskPriority(project: Pick<CodexProjectRow, 'statusTone' | 'threads'>): number {
+  let best = codexTaskPriority(project.statusTone)
+  for (const thread of project.threads) {
+    const p = codexTaskPriority(thread.statusTone)
+    if (p > best) {
+      best = p
+    }
+  }
+  return best
+}
+
+export function compareCodexThreadsByTask(a: CodexRecentRow, b: CodexRecentRow): number {
+  return (
+    codexTaskPriority(b.statusTone) - codexTaskPriority(a.statusTone) ||
+    b.timestamp - a.timestamp ||
+    a.title.localeCompare(b.title)
+  )
+}
+
 export function mapAgentStateToCodexTone(
   state: ActivityLiveAgentState | null | undefined,
   unread: boolean

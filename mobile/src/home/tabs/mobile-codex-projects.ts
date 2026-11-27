@@ -62,6 +62,21 @@ export type MobileCodexProjectsModel = Readonly<{
 
 const TONE_PRIORITY: Record<MobileCodexTone, number> = { working: 3, attention: 2, active: 1, idle: 0 }
 
+function mobileTaskPriority(tone: MobileCodexTone): number {
+  return tone === 'working' ? 2 : tone === 'attention' ? 1 : 0
+}
+
+function mobileProjectTaskPriority(project: MobileCodexProjectRow): number {
+  let best = mobileTaskPriority(project.statusTone)
+  for (const thread of project.threads) {
+    const p = mobileTaskPriority(thread.statusTone)
+    if (p > best) {
+      best = p
+    }
+  }
+  return best
+}
+
 function higherTone(left: MobileCodexTone, right: MobileCodexTone): MobileCodexTone {
   return TONE_PRIORITY[left] >= TONE_PRIORITY[right] ? left : right
 }
@@ -256,42 +271,27 @@ export function buildMobileCodexProjectsModel(args: {
     }
   }
 
-  const projectsWithThreads: MobileCodexProjectRow[] = projects.map((project) => {
-    const projectThreads = project.items
-      .flatMap((item) => threadsByWorktreeKey.get(item.key) ?? [])
-      .sort((a, b) => b.timestamp - a.timestamp || a.title.localeCompare(b.title))
-    return { ...project, threads: projectThreads }
-  })
+  const projectsWithThreads: MobileCodexProjectRow[] = projects
+    .map((project) => ({
+      ...project,
+      threads: project.items
+        .flatMap((item) => threadsByWorktreeKey.get(item.key) ?? [])
+        .sort((a, b) => mobileTaskPriority(b.statusTone) - mobileTaskPriority(a.statusTone) || b.timestamp - a.timestamp || a.title.localeCompare(b.title))
+    }))
+    .sort((a, b) => mobileProjectTaskPriority(b) - mobileProjectTaskPriority(a) || b.lastActivityAt - a.lastActivityAt || a.repo.localeCompare(b.repo))
 
   for (const project of projects) {
     for (const item of project.items) {
-      if (worktreeKeysWithAgent.has(item.key) || (!item.active && !item.working && !item.unread && item.lastActivityAt <= 0)) {
-        continue
-      }
+      if (worktreeKeysWithAgent.has(item.key) || (!item.active && !item.working && !item.unread && item.lastActivityAt <= 0)) { continue }
       allRecentRows.push({
-        key: `wt:${item.key}`,
-        kind: 'worktree',
-        title: item.row.displayName?.trim() || project.repo,
-        projectName: project.repo,
-        host: item.host,
-        worktreeId: item.row.worktreeId,
-        row: item.row,
-        agentRow: null,
-        markIcon: project.markIcon,
-        markColor: project.markColor,
-        statusTone: itemTone(item),
-        unread: item.unread,
-        timestamp: item.lastActivityAt
+        key: `wt:${item.key}`, kind: 'worktree', title: item.row.displayName?.trim() || project.repo, projectName: project.repo,
+        host: item.host, worktreeId: item.row.worktreeId, row: item.row, agentRow: null,
+        markIcon: project.markIcon, markColor: project.markColor, statusTone: itemTone(item), unread: item.unread, timestamp: item.lastActivityAt
       })
     }
   }
 
-  allRecentRows.sort(
-    (a, b) =>
-      b.timestamp - a.timestamp ||
-      TONE_PRIORITY[b.statusTone] - TONE_PRIORITY[a.statusTone] ||
-      a.title.localeCompare(b.title)
-  )
+  allRecentRows.sort((a, b) => mobileTaskPriority(b.statusTone) - mobileTaskPriority(a.statusTone) || b.timestamp - a.timestamp || TONE_PRIORITY[b.statusTone] - TONE_PRIORITY[a.statusTone] || a.title.localeCompare(b.title))
 
   const recentItems = args.onlyActiveRecent
     ? allRecentRows.filter((row) => row.statusTone === 'working' || row.statusTone === 'attention' || row.unread)

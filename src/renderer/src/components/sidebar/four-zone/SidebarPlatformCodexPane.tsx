@@ -21,11 +21,12 @@ import { groupCodexProjectsByHost, resolveCodexZoneHostMeta } from './sidebar-co
 import { buildCodexSidebarModel, type CodexProjectRow, type CodexRecentRow } from './sidebar-codex-model'
 import {
   ensureCodexExpanded,
-  setCodexAllProjectsCollapsed,
+  resolveCodexProjectExpanded,
+  setCodexAllProjectsExpanded,
   setCodexViewMode,
   toggleCodexHostCollapsed,
   toggleCodexOnlyActive,
-  toggleCodexProjectCollapsed,
+  toggleCodexProjectExpanded,
   useCodexCollapseState
 } from './sidebar-codex-collapse-state'
 import { dismissCodexArchivedThread, rememberLiveCodexThreads, useCodexArchivedThreads } from './sidebar-codex-thread-archive'
@@ -78,7 +79,7 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
   const botGroups = useBotGroups(botsEnabled)
   const { allThreads } = useAllAgentPaneThreads()
 
-  const { viewMode, collapsedProjects, collapsedHosts, onlyActive } = useCodexCollapseState()
+  const { viewMode, projectExpandOverrides, collapsedHosts, onlyActive } = useCodexCollapseState()
   const [showAllRecent, setShowAllRecent] = useState(false)
   const [selectedPaneKey, setSelectedPaneKey] = useState<string | null>(null)
   const threadProjectOverrides = useCodexThreadProjectMap()
@@ -169,12 +170,14 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
     [groupByHost, hostMeta, visibleProjects]
   )
 
-  const collapsibleProjectKeys = useMemo(
-    () => visibleProjects.filter((p) => p.threads.length > 0 || p.worktrees.length > 1).map((p) => p.key),
+  const collapsibleProjects = useMemo(
+    () => visibleProjects.filter((p) => p.threads.length > 0 || p.worktrees.length > 1),
     [visibleProjects]
   )
-  const allCollapsibleCollapsed =
-    collapsibleProjectKeys.length > 0 && collapsibleProjectKeys.every((key) => collapsedProjects.has(key))
+  const collapsibleProjectKeys = useMemo(() => collapsibleProjects.map((p) => p.key), [collapsibleProjects])
+  const anyCollapsibleExpanded = collapsibleProjects.some((p) =>
+    resolveCodexProjectExpanded(p, projectExpandOverrides)
+  )
 
   const threadsRef = useRef(allThreads)
   threadsRef.current = allThreads
@@ -245,24 +248,27 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
 
   const visibleRecentItems = showAllRecent ? model.recentItems : model.recentItems.slice(0, INITIAL_RECENT_LIMIT)
   const hiddenRecentCount = model.recentItems.length - visibleRecentItems.length
-  const renderProjectRow = (project: CodexProjectRow) => (
-    <CodexProjectRowItem
-      key={project.key}
-      project={project}
-      allProjects={model.projects}
-      movedThreadKeys={threadProjectOverrides}
-      isExpanded={!collapsedProjects.has(project.key)}
-      onlyActive={onlyActive}
-      onToggleExpand={toggleCodexProjectCollapsed}
-      onActivateWorktree={handleActivateWorktree}
-      onSelectThread={handleSelectThread}
-      onCreateWorkspace={handleProjectCreate}
-      onRenameProject={handleRenameProject}
-      onMoveThread={moveCodexThreadToProject}
-      onResetThreadMove={resetCodexThreadProject}
-      onDismissArchivedThread={dismissCodexArchivedThread}
-    />
-  )
+  const renderProjectRow = (project: CodexProjectRow) => {
+    const expanded = resolveCodexProjectExpanded(project, projectExpandOverrides)
+    return (
+      <CodexProjectRowItem
+        key={project.key}
+        project={project}
+        allProjects={model.projects}
+        movedThreadKeys={threadProjectOverrides}
+        isExpanded={expanded}
+        onlyActive={onlyActive}
+        onToggleExpand={(key) => toggleCodexProjectExpanded(key, expanded)}
+        onActivateWorktree={handleActivateWorktree}
+        onSelectThread={handleSelectThread}
+        onCreateWorkspace={handleProjectCreate}
+        onRenameProject={handleRenameProject}
+        onMoveThread={moveCodexThreadToProject}
+        onResetThreadMove={resetCodexThreadProject}
+        onDismissArchivedThread={dismissCodexArchivedThread}
+      />
+    )
+  }
 
   if (model.projects.length === 0 && model.totalRecentCount === 0) {
     return (
@@ -298,15 +304,15 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
               <TooltipTrigger asChild>
                 <button
                   type="button"
-                  aria-label={allCollapsibleCollapsed ? '全部展开项目' : '全部折叠项目'}
-                  onClick={() => setCodexAllProjectsCollapsed(collapsibleProjectKeys, !allCollapsibleCollapsed)}
+                  aria-label={anyCollapsibleExpanded ? '全部折叠项目' : '全部展开项目'}
+                  onClick={() => setCodexAllProjectsExpanded(collapsibleProjectKeys, !anyCollapsibleExpanded)}
                   className="flex size-5 items-center justify-center rounded text-muted-foreground/80 transition-colors hover:bg-worktree-sidebar-foreground/8 hover:text-foreground"
                 >
-                  {allCollapsibleCollapsed ? <ChevronsUpDown className="size-3" /> : <ChevronsDownUp className="size-3" />}
+                  {anyCollapsibleExpanded ? <ChevronsDownUp className="size-3" /> : <ChevronsUpDown className="size-3" />}
                 </button>
               </TooltipTrigger>
               <TooltipContent side="bottom" sideOffset={6}>
-                {allCollapsibleCollapsed ? '全部展开项目' : '全部折叠项目'}
+                {anyCollapsibleExpanded ? '全部折叠项目' : '全部展开项目'}
               </TooltipContent>
             </Tooltip>
           ) : null}

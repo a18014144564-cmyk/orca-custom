@@ -26,6 +26,9 @@ import {
 import {
   CODEX_TONE_PRIORITY,
   buildFolderRepoMark,
+  codexProjectTaskPriority,
+  codexTaskPriority,
+  compareCodexThreadsByTask,
   higherCodexTone,
   makeCodexFallbackRecentRow,
   mapAgentStateToCodexTone,
@@ -245,67 +248,21 @@ export function buildCodexSidebarModel(args: {
     const statusTone = threadTone !== 'idle' ? threadTone : folder.isUnread ? 'active' : 'idle'
     const lastActivityAt = Math.max(folder.lastActivityAt ?? 0, latestThreadAtByWorktreeId.get(wtId) ?? 0)
     const isActive = args.activeWorktreeId === wtId
-    const item: CodexProjectWorktreeItem = {
-      id: wtId,
-      hostId,
-      label: folder.name,
-      branch: '',
-      isMain: true,
-      isActive,
-      isPinned: folder.isPinned,
-      openTabCount,
-      statusTone,
-      lastActivityAt
-    }
-
-    const folderThreads = [...(threadsByWorktreeId.get(wtId) ?? [])].sort(
-      (a, b) => b.timestamp - a.timestamp || a.title.localeCompare(b.title)
-    )
-    projects.push({
-      key: `folder:${folder.id}`,
-      kind: 'folder',
-      hostId: canonicalHostId,
-      name: folder.name,
-      repo: null,
-      folderId: folder.id,
-      markRepo,
-      primaryWorktree: item,
-      worktrees: [item],
-      threads: folderThreads,
-      openTabCount,
-      isActive,
-      isPinned: folder.isPinned,
-      statusTone,
-      lastActivityAt,
-      addedAt: folder.createdAt
-    })
-
+    const item: CodexProjectWorktreeItem = { id: wtId, hostId, label: folder.name, branch: '', isMain: true, isActive, isPinned: folder.isPinned, openTabCount, statusTone, lastActivityAt }
+    const folderThreads = [...(threadsByWorktreeId.get(wtId) ?? [])].sort(compareCodexThreadsByTask)
+    projects.push({ key: `folder:${folder.id}`, kind: 'folder', hostId: canonicalHostId, name: folder.name, repo: null, folderId: folder.id, markRepo, primaryWorktree: item, worktrees: [item], threads: folderThreads, openTabCount, isActive, isPinned: folder.isPinned, statusTone, lastActivityAt, addedAt: folder.createdAt })
     if (!worktreeIdsWithThread.has(wtId) && (openTabCount > 0 || lastActivityAt > 0 || isActive)) {
-      allRecentRows.push(
-        makeCodexFallbackRecentRow({
-          title: folder.name,
-          projectName: folder.name,
-          worktreeId: wtId,
-          hostId,
-          markRepo,
-          statusTone,
-          isActive,
-          isUnread: folder.isUnread,
-          timestamp: lastActivityAt
-        })
-      )
+      allRecentRows.push(makeCodexFallbackRecentRow({ title: folder.name, projectName: folder.name, worktreeId: wtId, hostId, markRepo, statusTone, isActive, isUnread: folder.isUnread, timestamp: lastActivityAt }))
     }
   }
 
   mergeArchivedCodexThreads({ projects, liveRows: allRecentRows, archivedThreads: args.archivedThreads, hostIdSet, botHomeWorktreeIds, activeWorktreeId: args.activeWorktreeId, selectedPaneKey: args.selectedPaneKey })
   applyCodexThreadProjectOverrides(projects, args.threadProjectOverrides)
 
-  projects.sort(
-    (a, b) => Number(b.isPinned) - Number(a.isPinned) || b.lastActivityAt - a.lastActivityAt || b.addedAt - a.addedAt || a.name.localeCompare(b.name)
-  )
-  allRecentRows.sort(
-    (a, b) => b.timestamp - a.timestamp || CODEX_TONE_PRIORITY[b.statusTone] - CODEX_TONE_PRIORITY[a.statusTone] || a.title.localeCompare(b.title)
-  )
+  // Always bubble running-task windows to the top inside each expanded project, and running-task projects to the top of each host.
+  for (const project of projects) { project.threads.sort(compareCodexThreadsByTask) }
+  projects.sort((a, b) => codexProjectTaskPriority(b) - codexProjectTaskPriority(a) || Number(b.isPinned) - Number(a.isPinned) || b.lastActivityAt - a.lastActivityAt || b.addedAt - a.addedAt || a.name.localeCompare(b.name))
+  allRecentRows.sort((a, b) => codexTaskPriority(b.statusTone) - codexTaskPriority(a.statusTone) || b.timestamp - a.timestamp || CODEX_TONE_PRIORITY[b.statusTone] - CODEX_TONE_PRIORITY[a.statusTone] || a.title.localeCompare(b.title))
 
   const recentItems = args.onlyActiveRecent
     ? allRecentRows.filter((r) => r.statusTone === 'working' || r.statusTone === 'attention' || r.isUnread || r.isActive)
