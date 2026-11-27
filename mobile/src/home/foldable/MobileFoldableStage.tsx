@@ -9,7 +9,7 @@ import {
   RefreshCw,
   SquareTerminal
 } from 'lucide-react-native'
-import { useMemo, useState } from 'react'
+import { memo, useMemo, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { colors } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
@@ -39,7 +39,7 @@ const AUX_TABS: readonly {
 ]
 
 /** Unfolded Magic V6 stage: ANY chat (Team / Bot / Project) on the left + Browser / Terminal / Files / Diff / Second Chat on the right. */
-export function MobileFoldableStage(props: {
+export const MobileFoldableStage = memo(function MobileFoldableStage(props: {
   target: FoldableStageTarget | null
   secondaryCandidates: readonly FoldableStageTarget[]
   midCollapsed: boolean
@@ -52,6 +52,7 @@ export function MobileFoldableStage(props: {
   useMobileColorScheme()
   const { target, splitActive, hingeGap } = props
   const [auxMode, setAuxMode] = useState<FoldableAuxMode>('browser')
+  const [browserMounted, setBrowserMounted] = useState(true)
   const [secondaryTarget, setSecondaryTarget] = useState<FoldableStageTarget | null>(null)
 
   const stageRoute = useMemo(
@@ -90,9 +91,9 @@ export function MobileFoldableStage(props: {
   const stageKey = foldableStageKey(target)
   const badge = foldableStageBadge(target)
 
-  const renderRightPaneBody = () => {
+  const renderNonBrowserAuxPane = () => {
     if (auxMode === 'browser') {
-      return <FoldableBrowserPane />
+      return null
     }
     if (auxMode === 'pick') {
       if (!secondaryTarget || !auxRoute) {
@@ -214,7 +215,12 @@ export function MobileFoldableStage(props: {
                       key={tab.id}
                       accessibilityRole="tab"
                       accessibilityState={{ selected: active }}
-                      onPress={() => setAuxMode(tab.id)}
+                      onPress={() => {
+                        setAuxMode(tab.id)
+                        if (tab.id === 'browser' && !browserMounted) {
+                          setBrowserMounted(true)
+                        }
+                      }}
                       style={[styles.auxTab, active && styles.auxTabActive]}
                     >
                       <Icon
@@ -228,11 +234,18 @@ export function MobileFoldableStage(props: {
                   )
                 })}
               </View>
-              <View style={styles.stagePane}>{renderRightPaneBody()}</View>
+              <View style={styles.stagePane}>
+                {browserMounted ? (
+                  <View style={auxMode === 'browser' ? styles.fill : styles.hidden}>
+                    <FoldableBrowserPane />
+                  </View>
+                ) : null}
+                {auxMode !== 'browser' ? renderNonBrowserAuxPane() : null}
+              </View>
             </View>
           </>
         ) : null}
       </View>
     </View>
   )
-}
+})

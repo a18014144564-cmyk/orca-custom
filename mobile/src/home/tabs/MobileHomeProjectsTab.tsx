@@ -32,7 +32,7 @@ import {
   toggleMobileCodexProjectExpanded,
   useMobileCodexCollapseState
 } from './mobile-codex-collapse-state'
-import { buildMobileCodexProjectsModel, type MobileCodexProjectRow, type MobileCodexRecentRow } from './mobile-codex-projects'
+import { buildMobileCodexProjectsModel, countMobilePlatformProjects, type MobileCodexProjectRow, type MobileCodexRecentRow } from './mobile-codex-projects'
 import { collectBotHomeWorktreeIds, resolvePlatformConnectionHealth, type MobileProjectsPlatform } from './mobile-four-zone'
 import { mobileHomeProjectsStyles as styles } from './mobile-home-projects-styles'
 import { MobileCodexHostGroupView, MobileCodexProjectRowView, MobileCodexRecentRowView, PlatformSegmentButton } from './MobileHomeProjectsRows'
@@ -75,28 +75,26 @@ export function MobileHomeProjectsTab(props: {
     [data.bots.rows]
   )
 
-  const winModel = useMemo(
+  const isWin = platform === 'win'
+  const currentHosts = isWin ? winHosts : macHosts
+  const inactiveHosts = isWin ? macHosts : winHosts
+  const currentModel = useMemo(
     () =>
       buildMobileCodexProjectsModel({
-        hosts: winHosts, worktreeInfo: data.worktreeInfo, hostStates: data.hostStates,
+        hosts: currentHosts, worktreeInfo: data.worktreeInfo, hostStates: data.hostStates,
         botHomeWorktreeIds, onlyActiveRecent: onlyActive
       }),
-    [botHomeWorktreeIds, data.hostStates, data.worktreeInfo, onlyActive, winHosts]
+    [botHomeWorktreeIds, currentHosts, data.hostStates, data.worktreeInfo, onlyActive]
   )
-  const macModel = useMemo(
-    () =>
-      buildMobileCodexProjectsModel({
-        hosts: macHosts, worktreeInfo: data.worktreeInfo, hostStates: data.hostStates,
-        botHomeWorktreeIds, onlyActiveRecent: onlyActive
-      }),
-    [botHomeWorktreeIds, data.hostStates, data.worktreeInfo, onlyActive, macHosts]
+  const inactiveCount = useMemo(
+    () => countMobilePlatformProjects(inactiveHosts, data.worktreeInfo, botHomeWorktreeIds),
+    [botHomeWorktreeIds, data.worktreeInfo, inactiveHosts]
   )
+  const winCount = isWin ? currentModel.projects.length : inactiveCount
+  const macCount = isWin ? inactiveCount : currentModel.projects.length
   const winHealth = useMemo(() => resolvePlatformConnectionHealth(winHosts, data.hostStates), [data.hostStates, winHosts])
   const macHealth = useMemo(() => resolvePlatformConnectionHealth(macHosts, data.hostStates), [data.hostStates, macHosts])
 
-  const isWin = platform === 'win'
-  const currentHosts = isWin ? winHosts : macHosts
-  const currentModel = isWin ? winModel : macModel
   const multiHost = currentHosts.length > 1
   const currentConnecting = currentHosts.some((host) => data.hostStates[host.id] === 'connecting')
 
@@ -189,7 +187,7 @@ export function MobileHomeProjectsTab(props: {
       <View style={styles.switcherTrack} accessibilityRole="tablist">
         <PlatformSegmentButton
           label="Win"
-          count={winModel.projects.length}
+          count={winCount}
           health={winHealth}
           selected={isWin}
           onPress={() => onSelectPlatform('win')}
@@ -197,7 +195,7 @@ export function MobileHomeProjectsTab(props: {
         />
         <PlatformSegmentButton
           label="Mac"
-          count={macModel.projects.length}
+          count={macCount}
           health={macHealth}
           selected={!isWin}
           onPress={() => onSelectPlatform('mac')}
@@ -273,6 +271,8 @@ export function MobileHomeProjectsTab(props: {
       )
     ) : (
       <ScrollView
+        removeClippedSubviews
+        keyboardShouldPersistTaps="handled"
         contentContainerStyle={[
           styles.content,
           { paddingBottom: props.bottomInset },

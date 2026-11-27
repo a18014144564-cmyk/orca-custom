@@ -44,16 +44,21 @@ export function useSidebarFourZone(botsEnabled: boolean) {
   const effectiveZoneMode: SidebarZoneMode =
     !botsEnabled && (zoneMode === 'teams' || zoneMode === 'bots') ? 'all' : zoneMode
 
-  const classifiedHosts = useMemo(
-    () =>
-      classifySidebarHostsByPlatform({
-        hostOptions,
-        localPlatform: getRendererAppPlatform(),
-        runtimeStatusByEnvironmentId,
-        sshConnectionStates
-      }),
-    [hostOptions, runtimeStatusByEnvironmentId, sshConnectionStates]
-  )
+  const prevClassifiedRef = useRef<{ sig: string; value: ReturnType<typeof classifySidebarHostsByPlatform> } | null>(null)
+  const classifiedHosts = useMemo(() => {
+    const next = classifySidebarHostsByPlatform({
+      hostOptions,
+      localPlatform: getRendererAppPlatform(),
+      runtimeStatusByEnvironmentId,
+      sshConnectionStates
+    })
+    const sig = `${next.winHostIds.join(',')}|${next.macHostIds.join(',')}|${next.otherHostIds.join(',')}`
+    if (prevClassifiedRef.current && prevClassifiedRef.current.sig === sig) {
+      return prevClassifiedRef.current.value
+    }
+    prevClassifiedRef.current = { sig, value: next }
+    return next
+  }, [hostOptions, runtimeStatusByEnvironmentId, sshConnectionStates])
 
   const pendingRevealWorktree = useAppStore((s) => s.pendingRevealWorktree)
   const activeWorkspaceExecutionHostId = useAppStore((s) => s.activeWorkspaceExecutionHostId)

@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronRight, Folder, FolderOpen, GitBranch } from 'lucide-react-native'
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import type { HostCatalogEntry } from '../../host-catalog/host-profile'
 import { colors } from '../../theme/mobile-theme'
@@ -40,7 +40,7 @@ function isLiveThread(item: MobileCodexRecentRow): boolean {
   return item.statusTone === 'working' || item.statusTone === 'attention' || item.unread
 }
 
-export function MobileCodexProjectRowView(props: {
+export const MobileCodexProjectRowView = memo(function MobileCodexProjectRowView(props: {
   project: MobileCodexProjectRow
   multiHost: boolean
   expanded: boolean
@@ -107,6 +107,9 @@ export function MobileCodexProjectRowView(props: {
             <View style={[styles.treeDot, { backgroundColor: collapsedDot }]} />
           ) : null}
           {!childrenVisible && project.unread ? <View style={styles.unreadDot} /> : null}
+          {!childrenVisible && filteredThreads.length + extraItems.length > 0 ? (
+            <Text style={styles.hostGroupCount}>{filteredThreads.length + extraItems.length}</Text>
+          ) : null}
         </View>
       </Pressable>
 
@@ -176,9 +179,9 @@ export function MobileCodexProjectRowView(props: {
       ) : null}
     </View>
   )
-}
+})
 
-export function MobileCodexRecentRowView(props: {
+export const MobileCodexRecentRowView = memo(function MobileCodexRecentRowView(props: {
   item: MobileCodexRecentRow
   separated: boolean
   onPress: () => void
@@ -216,9 +219,9 @@ export function MobileCodexRecentRowView(props: {
       </Pressable>
     </View>
   )
-}
+})
 
-export function MobileCodexHostGroupView(props: {
+export const MobileCodexHostGroupView = memo(function MobileCodexHostGroupView(props: {
   host: HostCatalogEntry
   online: boolean
   projects: readonly MobileCodexProjectRow[]
@@ -276,9 +279,9 @@ export function MobileCodexHostGroupView(props: {
       ) : null}
     </View>
   )
-}
+})
 
-export function PlatformSegmentButton(props: {
+export const PlatformSegmentButton = memo(function PlatformSegmentButton(props: {
   label: string
   count: number
   health: PlatformConnectionHealth
@@ -312,4 +315,4 @@ export function PlatformSegmentButton(props: {
       ) : null}
     </Pressable>
   )
-}
+})

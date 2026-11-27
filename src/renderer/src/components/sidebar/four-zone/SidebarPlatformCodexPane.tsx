@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Clock, FolderTree, LayoutList, Plus, SlidersHorizontal } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
@@ -18,7 +18,7 @@ import { getSettingsFocusedExecutionHostId, type ExecutionHostId } from '../../.
 import { collectExcludedBotSessionIds } from './sidebar-codex-bot-filter'
 import { useSidebarHostScopeOptions } from '../worktree-list/controls/use-sidebar-host-scope-options'
 import { groupCodexProjectsByHost, resolveCodexZoneHostMeta } from './sidebar-codex-host-groups'
-import { buildCodexSidebarModel, type CodexProjectRow, type CodexRecentRow } from './sidebar-codex-model'
+import { buildCodexSidebarModel, type CodexProjectRow, type CodexRecentRow, type CodexTabLike } from './sidebar-codex-model'
 import {
   ensureCodexExpanded,
   resolveCodexProjectExpanded,
@@ -37,6 +37,9 @@ import { CodexProjectRowItem, CodexRecentRowItem } from './SidebarPlatformCodexR
 const INITIAL_RECENT_LIMIT = 24
 const NO_CHILDREN: ReadonlyMap<string, readonly Worktree[]> = new Map()
 const EMPTY_IDENTITIES: ReadonlySet<string> = new Set()
+const EMPTY_TABS: Readonly<Record<string, readonly CodexTabLike[] | undefined>> = {}
+const EMPTY_BROWSER_TABS: Readonly<Record<string, readonly unknown[] | undefined>> = {}
+const HOST_SECTION_STYLE: React.CSSProperties = { contain: 'layout style' }
 
 type SidebarPlatformCodexPaneProps = {
   hostIds: readonly ExecutionHostId[]
@@ -61,13 +64,10 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
   const worktreesByRepo = useAppStore(selectWorktreesByRepo)
   const folderWorkspaces = useAppStore(selectFolderWorkspaces)
   const worktreeLineageById = useAppStore((s) => s.worktreeLineageById)
-  const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
-  const unifiedTabsByWorktree = useAppStore((s) => s.unifiedTabsByWorktree)
-  const browserTabsByWorktree = useAppStore((s) => s.browserTabsByWorktree)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const pendingRevealWorktree = useAppStore((s) => s.pendingRevealWorktree)
   const clearPendingRevealWorktreeId = useAppStore((s) => s.clearPendingRevealWorktreeId)
-  const settings = useAppStore((s) => s.settings)
+  const defaultHostId = useAppStore((s) => getSettingsFocusedExecutionHostId(s.settings))
   const openModal = useAppStore((s) => s.openModal)
   const updateRepo = useAppStore((s) => s.updateRepo)
   const updateFolderWorkspace = useAppStore((s) => s.updateFolderWorkspace)
@@ -77,11 +77,14 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
   const botsEnabled = useBotsEnabled()
   const bots = useBots(botsEnabled)
   const botGroups = useBotGroups(botsEnabled)
-  const { allThreads } = useAllAgentPaneThreads()
+  const { allThreads: liveAllThreads } = useAllAgentPaneThreads()
+  // Defer high-frequency streaming thread updates so zone switching and row clicks stay instant.
+  const allThreads = useDeferredValue(liveAllThreads)
 
   const { viewMode, projectExpandOverrides, collapsedHosts, onlyActive } = useCodexCollapseState()
   const [showAllRecent, setShowAllRecent] = useState(false)
   const [selectedPaneKey, setSelectedPaneKey] = useState<string | null>(null)
+  const [reopeningThreadKey, setReopeningThreadKey] = useState<string | null>(null)
   const threadProjectOverrides = useCodexThreadProjectMap()
   const archivedThreads = useCodexArchivedThreads()
 
@@ -91,7 +94,6 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
     [hostOptions, hostIds]
   )
 
-  const defaultHostId = getSettingsFocusedExecutionHostId(settings)
   const botHomeOwners = useMemo(() => [...bots, ...botGroups], [bots, botGroups])
   const childrenByParent = useAppStoreWithHostStatuses((s, statuses) =>
     botHomeOwners.length === 0 ? NO_CHILDREN : selectSidebarChildrenByParentIdentity(s, statuses)
@@ -123,8 +125,8 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
         worktreeLineageById,
         canonicalHostById: hostMeta.canonicalHostById,
         allThreads,
-        tabsByWorktree,
-        browserTabsByWorktree,
+        tabsByWorktree: EMPTY_TABS,
+        browserTabsByWorktree: EMPTY_BROWSER_TABS,
         hostIds,
         defaultHostId,
         activeWorktreeId,
@@ -136,14 +138,18 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
     [
       repos, worktreesByRepo, folderWorkspaces, botHomeOwners, botOwnedWorktreeIdentities,
       excludedBotSessionIds, worktreeLineageById, hostMeta.canonicalHostById, allThreads,
-      tabsByWorktree, browserTabsByWorktree, hostIds, defaultHostId, activeWorktreeId,
+      hostIds, defaultHostId, activeWorktreeId,
       selectedPaneKey, onlyActive, threadProjectOverrides, archivedThreads
     ]
   )
 
+  // Archive live threads asynchronously off the hot render path; read unifiedTabs lazily without subscribing in render.
   useEffect(() => {
-    rememberLiveCodexThreads(model.recentItems, unifiedTabsByWorktree)
-  }, [model.recentItems, unifiedTabsByWorktree])
+    const timer = setTimeout(() => {
+      rememberLiveCodexThreads(model.recentItems, useAppStore.getState().unifiedTabsByWorktree)
+    }, 400)
+    return () => clearTimeout(timer)
+  }, [model.recentItems])
 
   // Consume reveal requests (e.g. after creating a new project) so stale pendingRevealWorktree never blocks rail navigation.
   useEffect(() => {
@@ -196,11 +202,7 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
   const handleActivateWorktree = useCallback(
     (worktreeId: string, hostId: ExecutionHostId) => {
       setSelectedPaneKey(null)
-      activateAndRevealWorkspace(worktreeId, {
-        executionHostId: hostId,
-        revealInSidebar: false,
-        clearSidebarFilters: false
-      })
+      activateAndRevealWorkspace(worktreeId, { executionHostId: hostId, revealInSidebar: false, clearSidebarFilters: false })
       onWorktreeClick?.()
     },
     [onWorktreeClick]
@@ -208,11 +210,8 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
 
   const handleProjectCreate = useCallback(
     (project: CodexProjectRow) => {
-      if (project.repo) {
-        openHeaderCreateComposer(project.repo, { pinHost: true })
-      } else {
-        openModal('new-workspace-composer', { telemetrySource: 'sidebar' })
-      }
+      if (project.repo) { openHeaderCreateComposer(project.repo, { pinHost: true }) }
+      else { openModal('new-workspace-composer', { telemetrySource: 'sidebar' }) }
     },
     [openModal]
   )
@@ -230,17 +229,12 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
 
   const handleSelectThread = useCallback(
     (item: CodexRecentRow) => {
-      if (item.thread) {
-        threadActions.selectThread(item.thread)
-        onWorktreeClick?.()
-        return
-      }
+      if (item.thread) { threadActions.selectThread(item.thread); onWorktreeClick?.(); return }
       setSelectedPaneKey(item.key)
-      void reopenArchivedCodexThread(item).then((opened) => {
-        if (!opened) {
-          handleActivateWorktree(item.worktreeId, item.hostId)
-        }
-      })
+      setReopeningThreadKey(item.key)
+      void reopenArchivedCodexThread(item)
+        .then((opened) => { if (!opened) { handleActivateWorktree(item.worktreeId, item.hostId) } })
+        .finally(() => { setReopeningThreadKey((prev) => (prev === item.key ? null : prev)) })
       onWorktreeClick?.()
     },
     [handleActivateWorktree, onWorktreeClick, threadActions]
@@ -248,27 +242,25 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
 
   const visibleRecentItems = showAllRecent ? model.recentItems : model.recentItems.slice(0, INITIAL_RECENT_LIMIT)
   const hiddenRecentCount = model.recentItems.length - visibleRecentItems.length
-  const renderProjectRow = (project: CodexProjectRow) => {
-    const expanded = resolveCodexProjectExpanded(project, projectExpandOverrides)
-    return (
-      <CodexProjectRowItem
-        key={project.key}
-        project={project}
-        allProjects={model.projects}
-        movedThreadKeys={threadProjectOverrides}
-        isExpanded={expanded}
-        onlyActive={onlyActive}
-        onToggleExpand={(key) => toggleCodexProjectExpanded(key, expanded)}
-        onActivateWorktree={handleActivateWorktree}
-        onSelectThread={handleSelectThread}
-        onCreateWorkspace={handleProjectCreate}
-        onRenameProject={handleRenameProject}
-        onMoveThread={moveCodexThreadToProject}
-        onResetThreadMove={resetCodexThreadProject}
-        onDismissArchivedThread={dismissCodexArchivedThread}
-      />
-    )
-  }
+  const renderProjectRow = (project: CodexProjectRow) => (
+    <CodexProjectRowItem
+      key={project.key}
+      project={project}
+      allProjects={model.projects}
+      movedThreadKeys={threadProjectOverrides}
+      isExpanded={resolveCodexProjectExpanded(project, projectExpandOverrides)}
+      onlyActive={onlyActive}
+      reopeningThreadKey={reopeningThreadKey}
+      onToggleExpand={toggleCodexProjectExpanded}
+      onActivateWorktree={handleActivateWorktree}
+      onSelectThread={handleSelectThread}
+      onCreateWorkspace={handleProjectCreate}
+      onRenameProject={handleRenameProject}
+      onMoveThread={moveCodexThreadToProject}
+      onResetThreadMove={resetCodexThreadProject}
+      onDismissArchivedThread={dismissCodexArchivedThread}
+    />
+  )
 
   if (model.projects.length === 0 && model.totalRecentCount === 0) {
     return (
@@ -384,7 +376,7 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
                     ? 'bg-amber-500 animate-pulse'
                     : 'bg-muted-foreground/45'
               return (
-                <div key={host.hostId} className="flex flex-col gap-0.5">
+                <div key={host.hostId} style={HOST_SECTION_STYLE} className="flex flex-col gap-0.5">
                   <button type="button" onClick={() => toggleCodexHostCollapsed(host.hostId)} className="flex h-7 items-center gap-1.5 rounded-md px-1.5 text-[12px] font-semibold text-foreground/85 transition-colors hover:bg-worktree-sidebar-foreground/6 hover:text-foreground">
                     {hostCollapsed ? <ChevronRight className="size-3.5 shrink-0 text-muted-foreground/75" /> : <ChevronDown className="size-3.5 shrink-0 text-muted-foreground/75" />}
                     <span aria-hidden className={cn('size-1.5 shrink-0 rounded-full', dotClass)} />

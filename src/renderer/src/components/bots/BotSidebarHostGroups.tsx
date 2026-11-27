@@ -23,8 +23,10 @@ function entryHostId(entry: HostKeyedEntry): ExecutionHostId {
   return entry.kind === 'bot' ? entry.bot!.hostId : entry.group!.hostId
 }
 
+const HOST_GROUP_STYLE: React.CSSProperties = { contain: 'layout style' }
+
 /** Groups Bot / Team sidebar entries under collapsible computer headers with crisp indentation when multiple hosts exist. */
-export function BotSidebarHostGroups<Entry extends HostKeyedEntry>({
+function BotSidebarHostGroupsInner<Entry extends HostKeyedEntry>({
   entries,
   renderEntry
 }: {
@@ -88,7 +90,7 @@ export function BotSidebarHostGroups<Entry extends HostKeyedEntry>({
               ? 'bg-amber-500 animate-pulse'
               : 'bg-muted-foreground/45'
         return (
-          <div key={host.hostId} className="flex flex-col gap-0.5">
+          <div key={host.hostId} style={HOST_GROUP_STYLE} className="flex flex-col gap-0.5">
             <button
               type="button"
               onClick={() => toggleCodexBotHostCollapsed(host.hostId)}
@@ -121,3 +123,5 @@ export function BotSidebarHostGroups<Entry extends HostKeyedEntry>({
     </div>
   )
 }
+
+export const BotSidebarHostGroups = React.memo(BotSidebarHostGroupsInner) as typeof BotSidebarHostGroupsInner

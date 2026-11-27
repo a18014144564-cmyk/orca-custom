@@ -25,6 +25,8 @@ import { MobileFoldableRail } from './MobileFoldableRail'
 import { MobileFoldableStage } from './MobileFoldableStage'
 import { MobileFoldableTabletopView } from './MobileFoldableTabletopView'
 
+const EMPTY_CANDIDATES: readonly FoldableStageTarget[] = []
+
 export function MobileFoldableWorkbench(props: {
   foldable: FoldablePostureMetrics
   data: MobileHomeData
@@ -55,6 +57,15 @@ export function MobileFoldableWorkbench(props: {
   const [midCollapsed, setMidCollapsed] = useState(false)
   const [splitActive, setSplitActive] = useState(false)
   const [tabletopDismissed, setTabletopDismissed] = useState(false)
+  const [visitedMidTabs, setVisitedMidTabs] = useState<ReadonlySet<string>>(
+    () => new Set([props.activeTab === 'usage' ? 'projects' : props.activeTab])
+  )
+
+  useEffect(() => {
+    if (props.activeTab !== 'usage' && !visitedMidTabs.has(props.activeTab)) {
+      setVisitedMidTabs((prev) => new Set([...prev, props.activeTab]))
+    }
+  }, [props.activeTab, visitedMidTabs])
 
   useEffect(() => {
     if (!foldable.isTabletop && tabletopDismissed) {
@@ -79,8 +90,11 @@ export function MobileFoldableWorkbench(props: {
     }
   }, [data.activeAgents, data.agentsNeedingYou, onChangeStageTarget, stageTarget])
 
-  // Build quick-pick candidates (Projects + Bots + Teams) for right-pane "双开".
-  const secondaryCandidates = useMemo<FoldableStageTarget[]>(() => {
+  // Only build quick-pick candidates when split view is active to avoid wasted work on every WS tick.
+  const secondaryCandidates = useMemo<readonly FoldableStageTarget[]>(() => {
+    if (!splitActive) {
+      return EMPTY_CANDIDATES
+    }
     const list: FoldableStageTarget[] = []
     const botHomeIds = collectBotHomeWorktreeIds(data.bots.rows)
     for (const host of data.connectedHosts) {
@@ -124,7 +138,7 @@ export function MobileFoldableWorkbench(props: {
       }
     }
     return list
-  }, [data.bots.rows, data.connectedHosts, data.worktreeInfo])
+  }, [data.bots.rows, data.connectedHosts, data.worktreeInfo, splitActive])
 
   const handleOpenWorktreeInStage = useCallback(
     (host: HostCatalogEntry, row: Worktree) => {
@@ -297,60 +311,73 @@ export function MobileFoldableWorkbench(props: {
             onOpenAccounts={props.onOpenAccounts}
           />
         </View>
-      ) : (
-        <>
-          {showMidPane ? (
-            <View style={[styles.midPane, { width: foldable.midPaneWidth }]}>
-              {props.activeTab === 'teams' ? (
-                <MobileHomeTeamsTab
-                  data={data}
-                  bottomInset={16}
-                  onOpenBot={handleOpenBotInStage}
-                  onPairDesktop={props.onPairDesktop}
-                  onOpenSettings={props.onOpenSettings}
-                  onToggleClassicLayout={props.onToggleClassicLayout}
-                />
-              ) : props.activeTab === 'bots' ? (
-                <MobileHomeBotsTab
-                  data={data}
-                  bottomInset={16}
-                  onNewBot={props.canCreateBot ? props.onOpenNewBot : undefined}
-                  onOpenBot={handleOpenBotInStage}
-                  rowKind="bot"
-                  titleOverride="单独 Bot"
-                />
-              ) : (
-                <MobileHomeProjectsTab
-                  platform={props.projectsPlatform}
-                  onSelectPlatform={props.onSelectProjectsPlatform}
-                  data={data}
-                  winHosts={props.winHosts}
-                  macHosts={props.macHosts}
-                  bottomInset={16}
-                  onOpenHost={props.onOpenHost}
-                  onOpenHostActions={props.onOpenHostActions}
-                  onOpenWorktree={handleOpenWorktreeInStage}
-                  onOpenAgent={handleOpenAgentInStage}
-                  onPairDesktop={props.onPairDesktop}
-                  onOpenSettings={props.onOpenSettings}
-                  onToggleClassicLayout={props.onToggleClassicLayout}
-                />
-              )}
+      ) : null}
+
+      {/* Keep visited mid-pane tabs and the live stage WebView mounted to avoid cold reloads and jank on tab switches. */}
+      <View style={isUsageTab ? styles.hidden : [styles.fill, { flexDirection: 'row' }]}>
+        <View style={showMidPane ? [styles.midPane, { width: foldable.midPaneWidth }] : styles.hidden}>
+          {visitedMidTabs.has('teams') ? (
+            <View style={props.activeTab === 'teams' ? styles.fill : styles.hidden}>
+              <MobileHomeTeamsTab
+                data={data}
+                bottomInset={16}
+                onOpenBot={handleOpenBotInStage}
+                onPairDesktop={props.onPairDesktop}
+                onOpenSettings={props.onOpenSettings}
+                onToggleClassicLayout={props.onToggleClassicLayout}
+              />
             </View>
           ) : null}
+          {visitedMidTabs.has('bots') ? (
+            <View style={props.activeTab === 'bots' ? styles.fill : styles.hidden}>
+              <MobileHomeBotsTab
+                data={data}
+                bottomInset={16}
+                onNewBot={props.canCreateBot ? props.onOpenNewBot : undefined}
+                onOpenBot={handleOpenBotInStage}
+                rowKind="bot"
+                titleOverride="单独 Bot"
+              />
+            </View>
+          ) : null}
+          {visitedMidTabs.has('projects') || (props.activeTab !== 'teams' && props.activeTab !== 'bots') ? (
+            <View
+              style={
+                props.activeTab !== 'teams' && props.activeTab !== 'bots' && props.activeTab !== 'usage'
+                  ? styles.fill
+                  : styles.hidden
+              }
+            >
+              <MobileHomeProjectsTab
+                platform={props.projectsPlatform}
+                onSelectPlatform={props.onSelectProjectsPlatform}
+                data={data}
+                winHosts={props.winHosts}
+                macHosts={props.macHosts}
+                bottomInset={16}
+                onOpenHost={props.onOpenHost}
+                onOpenHostActions={props.onOpenHostActions}
+                onOpenWorktree={handleOpenWorktreeInStage}
+                onOpenAgent={handleOpenAgentInStage}
+                onPairDesktop={props.onPairDesktop}
+                onOpenSettings={props.onOpenSettings}
+                onToggleClassicLayout={props.onToggleClassicLayout}
+              />
+            </View>
+          ) : null}
+        </View>
 
-          <MobileFoldableStage
-            target={stageTarget}
-            secondaryCandidates={secondaryCandidates}
-            midCollapsed={midCollapsed}
-            splitActive={splitActive}
-            hingeGap={foldable.hingeGap}
-            onToggleMidCollapsed={handleToggleMid}
-            onToggleSplit={handleToggleSplit}
-            onOpenFullScreen={handleOpenFullScreen}
-          />
-        </>
-      )}
+        <MobileFoldableStage
+          target={stageTarget}
+          secondaryCandidates={secondaryCandidates}
+          midCollapsed={midCollapsed}
+          splitActive={splitActive}
+          hingeGap={foldable.hingeGap}
+          onToggleMidCollapsed={handleToggleMid}
+          onToggleSplit={handleToggleSplit}
+          onOpenFullScreen={handleOpenFullScreen}
+        />
+      </View>
     </View>
   )
 }

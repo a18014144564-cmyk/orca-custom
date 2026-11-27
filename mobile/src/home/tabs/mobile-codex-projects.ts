@@ -81,6 +81,25 @@ function higherTone(left: MobileCodexTone, right: MobileCodexTone): MobileCodexT
   return TONE_PRIORITY[left] >= TONE_PRIORITY[right] ? left : right
 }
 
+/** Fast O(N) project count for the inactive Win/Mac segment pill without building the full Codex model. */
+export function countMobilePlatformProjects(
+  hosts: readonly HostCatalogEntry[],
+  worktreeInfo: Readonly<Record<string, HostWorktreeInfo | undefined>>,
+  botHomeWorktreeIds: ReadonlySet<string>
+): number {
+  const keys = new Set<string>()
+  for (const host of hosts) {
+    const info = worktreeInfo[host.id]
+    const rows = info?.rows
+    if (!rows) { continue }
+    for (const row of rows) {
+      if (isExcludedMobileBotOrWorkerRow(row, botHomeWorktreeIds, info?.workspaceLineage)) { continue }
+      keys.add(`${host.id}::${row.repoId || row.repo || row.worktreeId}`)
+    }
+  }
+  return keys.size
+}
+
 export function isExcludedMobileBotOrWorkerRow(
   row: Worktree,
   botHomeWorktreeIds: ReadonlySet<string>,

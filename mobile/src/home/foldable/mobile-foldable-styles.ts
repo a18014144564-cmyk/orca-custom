@@ -57,6 +57,8 @@ export const mobileFoldableStyles = themedStyleSheet(() => ({
   railDivider: { width: 24, height: StyleSheet.hairlineWidth, backgroundColor: colors.borderSubtle, marginVertical: 2 },
   midPane: { borderRightWidth: StyleSheet.hairlineWidth, borderRightColor: colors.borderSubtle, backgroundColor: colors.bgBase },
   stageRoot: { flex: 1, minWidth: 0, backgroundColor: colors.bgBase },
+  fill: { flex: 1, minWidth: 0, minHeight: 0 },
+  hidden: { display: 'none' },
   stageBar: {
     height: 42,
     flexDirection: 'row',

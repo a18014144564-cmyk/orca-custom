@@ -1,27 +1,28 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Folder, FolderInput, FolderOpen, GitBranch, Pencil, RotateCcw, SquarePen, Trash2 } from 'lucide-react'
+import { Folder, FolderOpen, GitBranch, Pencil, SquarePen } from 'lucide-react'
 import { cn } from '@/lib/class-names'
 import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuSeparator,
-  ContextMenuSub,
-  ContextMenuSubContent,
-  ContextMenuSubTrigger,
   ContextMenuTrigger
 } from '@/components/ui/context-menu'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import {
   formatCodexRelativeTime,
-  type CodexActivityTone,
   type CodexProjectRow,
   type CodexRecentRow
 } from './sidebar-codex-types'
+import {
+  CODEX_THREAD_DRAG_MIME,
+  CodexStatusDot,
+  CodexThreadRowItem
+} from './SidebarCodexThreadRow'
+
+export { CodexStatusDot }
 
 const INITIAL_PROJECT_THREADS = 5
-const DRAG_MIME = 'application/x-orca-codex-thread'
 
 function isLiveCodexThread(item: CodexRecentRow): boolean {
   return (
@@ -32,29 +33,13 @@ function isLiveCodexThread(item: CodexRecentRow): boolean {
   )
 }
 
-export function CodexStatusDot({ tone }: { tone: CodexActivityTone }): React.JSX.Element | null {
-  if (tone === 'idle') {
-    return null
-  }
-  return (
-    <span
-      aria-hidden
-      className={cn(
-        'size-1.5 shrink-0 rounded-full',
-        tone === 'working' && 'bg-amber-500 animate-pulse',
-        tone === 'attention' && 'bg-amber-500',
-        tone === 'active' && 'bg-emerald-500'
-      )}
-    />
-  )
-}
-
-export function CodexProjectRowItem({
+export const CodexProjectRowItem = React.memo(function CodexProjectRowItem({
   project,
   allProjects,
   movedThreadKeys,
   isExpanded,
   onlyActive,
+  reopeningThreadKey,
   onToggleExpand,
   onActivateWorktree,
   onSelectThread,
@@ -69,7 +54,8 @@ export function CodexProjectRowItem({
   movedThreadKeys: Readonly<Record<string, string>>
   isExpanded: boolean
   onlyActive: boolean
-  onToggleExpand: (projectKey: string) => void
+  reopeningThreadKey: string | null
+  onToggleExpand: (projectKey: string, currentlyExpanded: boolean) => void
   onActivateWorktree: (worktreeId: string, hostId: ExecutionHostId) => void
   onSelectThread: (item: CodexRecentRow) => void
   onCreateWorkspace: (project: CodexProjectRow) => void
@@ -82,6 +68,7 @@ export function CodexProjectRowItem({
   const [renaming, setRenaming] = useState(false)
   const [draftName, setDraftName] = useState(project.name)
   const [dropActive, setDropActive] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
   const inputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
@@ -110,33 +97,27 @@ export function CodexProjectRowItem({
   const childrenVisible = hasChildren && isExpanded
   const visibleThreads = showAllThreads ? filteredThreads : filteredThreads.slice(0, INITIAL_PROJECT_THREADS)
   const hiddenThreadCount = filteredThreads.length - visibleThreads.length
+  const collapsedChildCount = filteredThreads.length + extraWorktrees.length
 
   const hasActiveChild =
     childrenVisible &&
     (visibleThreads.some((t) => t.isActive) || extraWorktrees.some((wt) => wt.isActive))
   const highlightProjectRow = project.isActive && !hasActiveChild
-  const moveTargets = allProjects.filter((candidate) => candidate.key !== project.key)
 
   return (
     <div
       className="flex flex-col"
       onDragOver={(event) => {
-        if (!event.dataTransfer.types.includes(DRAG_MIME)) {
-          return
-        }
+        if (!event.dataTransfer.types.includes(CODEX_THREAD_DRAG_MIME)) { return }
         event.preventDefault()
         event.dataTransfer.dropEffect = 'move'
-        if (!dropActive) {
-          setDropActive(true)
-        }
+        if (!dropActive) { setDropActive(true) }
       }}
       onDragLeave={() => {
-        if (dropActive) {
-          setDropActive(false)
-        }
+        if (dropActive) { setDropActive(false) }
       }}
       onDrop={(event) => {
-        const threadKey = event.dataTransfer.getData(DRAG_MIME)
+        const threadKey = event.dataTransfer.getData(CODEX_THREAD_DRAG_MIME)
         setDropActive(false)
         if (threadKey) {
           event.preventDefault()
@@ -144,11 +125,11 @@ export function CodexProjectRowItem({
         }
       }}
     >
-      <ContextMenu>
+      <ContextMenu onOpenChange={setMenuOpen}>
         <ContextMenuTrigger asChild>
           <div
             className={cn(
-              'group flex h-7 items-center gap-1.5 rounded-md px-2 text-[13px] transition-colors',
+              'group flex h-7 items-center gap-1.5 rounded-md px-2 text-[13px] transition-colors duration-100',
               dropActive
                 ? 'bg-primary/12 text-foreground ring-1 ring-primary/60'
                 : highlightProjectRow
@@ -168,13 +149,8 @@ export function CodexProjectRowItem({
                   onChange={(event) => setDraftName(event.target.value)}
                   onBlur={commitRename}
                   onKeyDown={(event) => {
-                    if (event.key === 'Enter') {
-                      event.preventDefault()
-                      commitRename()
-                    } else if (event.key === 'Escape') {
-                      event.preventDefault()
-                      cancelRename()
-                    }
+                    if (event.key === 'Enter') { event.preventDefault(); commitRename() }
+                    else if (event.key === 'Escape') { event.preventDefault(); cancelRename() }
                   }}
                   aria-label="修改项目名称"
                   className="h-5 min-w-0 flex-1 rounded bg-background px-1.5 text-[13px] font-normal text-foreground ring-1 ring-ring outline-none"
@@ -185,7 +161,7 @@ export function CodexProjectRowItem({
                 type="button"
                 onClick={() => {
                   if (hasChildren) {
-                    onToggleExpand(project.key)
+                    onToggleExpand(project.key, isExpanded)
                   } else {
                     onActivateWorktree(project.primaryWorktree.id, project.primaryWorktree.hostId)
                   }
@@ -202,131 +178,70 @@ export function CodexProjectRowItem({
             )}
 
             {!renaming ? (
-              <div className="flex shrink-0 items-center gap-1.5">
+              <div className="flex shrink-0 items-center gap-1">
                 {!childrenVisible && project.statusTone !== 'idle' ? (
                   <CodexStatusDot tone={project.statusTone} />
                 ) : null}
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      aria-label={`在 ${project.name} 中新建对话`}
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        onCreateWorkspace(project)
-                      }}
-                      className="flex size-5 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:bg-worktree-sidebar-foreground/10 hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100"
-                    >
-                      <SquarePen className="size-3" />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="right" sideOffset={6}>
-                    在 {project.name} 新建对话
-                  </TooltipContent>
-                </Tooltip>
+                {!childrenVisible && collapsedChildCount > 0 ? (
+                  <span className="text-[10.5px] tabular-nums text-muted-foreground/55 group-hover:hidden">
+                    {collapsedChildCount}
+                  </span>
+                ) : null}
+                <button
+                  type="button"
+                  title={`在 ${project.name} 新建对话`}
+                  aria-label={`在 ${project.name} 中新建对话`}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    onCreateWorkspace(project)
+                  }}
+                  className="hidden size-5 items-center justify-center rounded text-muted-foreground hover:bg-worktree-sidebar-foreground/10 hover:text-foreground group-hover:flex focus-visible:flex"
+                >
+                  <SquarePen className="size-3" />
+                </button>
               </div>
             ) : null}
           </div>
         </ContextMenuTrigger>
-        <ContextMenuContent className="w-40">
-          <ContextMenuItem onSelect={() => setTimeout(beginRename, 0)}>
-            <Pencil className="mr-2 size-3.5" />
-            重命名项目
-          </ContextMenuItem>
-          <ContextMenuItem onSelect={() => onCreateWorkspace(project)}>
-            <SquarePen className="mr-2 size-3.5" />
-            新建对话 / 工作区
-          </ContextMenuItem>
-          <ContextMenuSeparator />
-          <ContextMenuItem
-            onSelect={() =>
-              onActivateWorktree(project.primaryWorktree.id, project.primaryWorktree.hostId)
-            }
-          >
-            <FolderOpen className="mr-2 size-3.5" />
-            打开工作区
-          </ContextMenuItem>
-        </ContextMenuContent>
+        {menuOpen ? (
+          <ContextMenuContent className="w-40">
+            <ContextMenuItem onSelect={() => setTimeout(beginRename, 0)}>
+              <Pencil className="mr-2 size-3.5" />
+              重命名项目
+            </ContextMenuItem>
+            <ContextMenuItem onSelect={() => onCreateWorkspace(project)}>
+              <SquarePen className="mr-2 size-3.5" />
+              新建对话 / 工作区
+            </ContextMenuItem>
+            <ContextMenuSeparator />
+            <ContextMenuItem
+              onSelect={() =>
+                onActivateWorktree(project.primaryWorktree.id, project.primaryWorktree.hostId)
+              }
+            >
+              <FolderOpen className="mr-2 size-3.5" />
+              打开工作区
+            </ContextMenuItem>
+          </ContextMenuContent>
+        ) : null}
       </ContextMenu>
 
       {childrenVisible ? (
         <div className="mt-0.5 mb-1 flex flex-col gap-0.5 pl-4">
-          {visibleThreads.map((thread) => {
-            const relTime = formatCodexRelativeTime(thread.timestamp)
-            const isMoved = thread.key in movedThreadKeys
-            return (
-              <ContextMenu key={thread.key}>
-                <ContextMenuTrigger asChild>
-                  <button
-                    type="button"
-                    draggable
-                    onDragStart={(event) => {
-                      event.dataTransfer.setData(DRAG_MIME, thread.key)
-                      event.dataTransfer.effectAllowed = 'move'
-                    }}
-                    onClick={() => onSelectThread(thread)}
-                    title={thread.title}
-                    className={cn(
-                      'flex h-7 items-center gap-2 rounded-md px-2 text-left text-[13px] transition-colors',
-                      thread.isActive
-                        ? 'bg-worktree-sidebar-foreground/10 font-medium text-foreground'
-                        : 'text-foreground/82 hover:bg-worktree-sidebar-foreground/6 hover:text-foreground'
-                    )}
-                  >
-                    <span className="flex w-2 shrink-0 items-center justify-center">
-                      <CodexStatusDot tone={thread.statusTone} />
-                    </span>
-                    <span className="min-w-0 flex-1 truncate">{thread.title}</span>
-                    {relTime ? (
-                      <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground/60">
-                        {relTime}
-                      </span>
-                    ) : null}
-                  </button>
-                </ContextMenuTrigger>
-                <ContextMenuContent className="w-44">
-                  <ContextMenuSub>
-                    <ContextMenuSubTrigger disabled={moveTargets.length === 0}>
-                      <FolderInput className="mr-2 size-3.5" />
-                      移动到项目
-                    </ContextMenuSubTrigger>
-                    <ContextMenuSubContent className="max-h-64 w-48 overflow-y-auto">
-                      {moveTargets.map((target) => (
-                        <ContextMenuItem
-                          key={target.key}
-                          onSelect={() => onMoveThread(thread.key, target.key)}
-                        >
-                          <Folder className="mr-2 size-3.5 shrink-0 text-muted-foreground" />
-                          <span className="truncate">{target.name}</span>
-                        </ContextMenuItem>
-                      ))}
-                    </ContextMenuSubContent>
-                  </ContextMenuSub>
-                  {isMoved ? (
-                    <>
-                      <ContextMenuSeparator />
-                      <ContextMenuItem onSelect={() => onResetThreadMove(thread.key)}>
-                        <RotateCcw className="mr-2 size-3.5" />
-                        移回原项目
-                      </ContextMenuItem>
-                    </>
-                  ) : null}
-                  {thread.isArchived ? (
-                    <>
-                      <ContextMenuSeparator />
-                      <ContextMenuItem
-                        variant="destructive"
-                        onSelect={() => onDismissArchivedThread(thread.key)}
-                      >
-                        <Trash2 className="mr-2 size-3.5" />
-                        从左侧列表移除
-                      </ContextMenuItem>
-                    </>
-                  ) : null}
-                </ContextMenuContent>
-              </ContextMenu>
-            )
-          })}
+          {visibleThreads.map((thread) => (
+            <CodexThreadRowItem
+              key={thread.key}
+              thread={thread}
+              projectKey={project.key}
+              allProjects={allProjects}
+              isMoved={thread.key in movedThreadKeys}
+              isReopening={reopeningThreadKey === thread.key}
+              onSelectThread={onSelectThread}
+              onMoveThread={onMoveThread}
+              onResetThreadMove={onResetThreadMove}
+              onDismissArchivedThread={onDismissArchivedThread}
+            />
+          ))}
 
           {extraWorktrees.map((wt) => {
             const relTime = formatCodexRelativeTime(wt.lastActivityAt)
@@ -336,7 +251,7 @@ export function CodexProjectRowItem({
                 type="button"
                 onClick={() => onActivateWorktree(wt.id, wt.hostId)}
                 className={cn(
-                  'flex h-7 items-center gap-2 rounded-md px-2 text-left text-[12.5px] transition-colors',
+                  'flex h-7 items-center gap-2 rounded-md px-2 text-left text-[12.5px] transition-colors duration-100',
                   wt.isActive
                     ? 'bg-worktree-sidebar-foreground/10 font-medium text-foreground'
                     : 'text-muted-foreground hover:bg-worktree-sidebar-foreground/6 hover:text-foreground'
@@ -367,9 +282,9 @@ export function CodexProjectRowItem({
       ) : null}
     </div>
   )
-}
+})
 
-export function CodexRecentRowItem({
+export const CodexRecentRowItem = React.memo(function CodexRecentRowItem({
   item,
   hostTag,
   onSelect
@@ -386,7 +301,7 @@ export function CodexRecentRowItem({
       onClick={() => onSelect(item)}
       title={`${metaHint} · ${item.title}`}
       className={cn(
-        'flex h-7 items-center gap-2 rounded-md px-2 text-left text-[13px] transition-colors',
+        'flex h-7 items-center gap-2 rounded-md px-2 text-left text-[13px] transition-colors duration-100',
         item.isActive
           ? 'bg-worktree-sidebar-foreground/10 font-medium text-foreground'
           : 'text-foreground/82 hover:bg-worktree-sidebar-foreground/6 hover:text-foreground'
@@ -406,4 +321,4 @@ export function CodexRecentRowItem({
       ) : null}
     </button>
   )
-}
+})

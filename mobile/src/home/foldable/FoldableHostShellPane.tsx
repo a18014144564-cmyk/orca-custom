@@ -1,4 +1,4 @@
-import { Component, type ReactNode } from 'react'
+import { Component, memo, type ReactNode } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { HostProtocolGate } from '../../components/host-connection/HostProtocolGate'
 import { MobileDictationHostProvider } from '../../dictation/mobile-dictation-host'
@@ -66,7 +66,7 @@ class FoldableStageErrorBoundary extends Component<BoundaryProps, BoundaryState>
  * Mounts MobileWebShellScreen safely inside the foldable workbench on the Home route by providing
  * the exact HostProtocolGate + MobileDictationHostProvider context tree that /h/_layout.tsx supplies.
  */
-export function FoldableHostShellPane(props: {
+export const FoldableHostShellPane = memo(function FoldableHostShellPane(props: {
   shellKey: string
   hostId: string
   route: BridgeInitRoute
@@ -88,7 +88,7 @@ export function FoldableHostShellPane(props: {
       </HostProtocolGate>
     </FoldableStageErrorBoundary>
   )
-}
+})
 
 const styles = themedStyleSheet(() => ({
   errorBox: {

@@ -142,18 +142,25 @@ function readStoredArchive(): readonly ArchivedCodexThread[] {
   }
 }
 
-function commitArchive(next: readonly ArchivedCodexThread[]): void {
+let pendingWriteTimer: ReturnType<typeof setTimeout> | null = null
+
+function flushArchiveToStorage(): void {
+  pendingWriteTimer = null
+  if (typeof window === 'undefined') { return }
+  try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(archivedList)) } catch { /* ignore quota */ }
+}
+
+function commitArchive(next: readonly ArchivedCodexThread[], immediate = false): void {
   archivedList = next
   if (typeof window !== 'undefined') {
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
-    } catch {
-      // Ignore storage quota errors.
+    if (immediate) {
+      if (pendingWriteTimer !== null) { clearTimeout(pendingWriteTimer) }
+      flushArchiveToStorage()
+    } else if (pendingWriteTimer === null) {
+      pendingWriteTimer = setTimeout(flushArchiveToStorage, 1500)
     }
   }
-  for (const listener of listeners) {
-    listener()
-  }
+  for (const listener of listeners) { listener() }
 }
 
 export function rememberLiveCodexThreads(
@@ -175,7 +182,7 @@ export function rememberLiveCodexThreads(
       existing.title === row.title &&
       existing.worktreeId === row.worktreeId &&
       existing.sessionId === nextSessionId &&
-      Math.abs(existing.timestamp - row.timestamp) < 10_000
+      Math.abs(existing.timestamp - row.timestamp) < 60_000
     ) {
       continue
     }
@@ -203,7 +210,7 @@ export function rememberLiveCodexThreads(
 export function dismissCodexArchivedThread(threadKey: string): void {
   const next = archivedList.filter((item) => item.key !== threadKey)
   if (next.length !== archivedList.length) {
-    commitArchive(next)
+    commitArchive(next, true)
   }
 }
 
