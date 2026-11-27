@@ -27,6 +27,7 @@ export type CodexProjectWorktreeItem = {
 export type CodexProjectRow = {
   key: string
   kind: 'repo' | 'folder'
+  hostId: ExecutionHostId
   name: string
   repo: Repo | null
   markRepo: RepoMarkRepo

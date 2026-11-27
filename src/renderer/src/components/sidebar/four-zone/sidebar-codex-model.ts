@@ -42,9 +42,7 @@ function countOpenTabs(
   browserTabsByWorktree: Readonly<Record<string, readonly unknown[] | undefined>>,
   excludedBotSessionIds: ReadonlySet<string>
 ): number {
-  const terminalTabs = (tabsByWorktree[worktreeId] ?? []).filter(
-    (tab) => !isExcludedBotSessionTabId(tab?.id, excludedBotSessionIds)
-  ).length
+  const terminalTabs = (tabsByWorktree[worktreeId] ?? []).filter((tab) => !isExcludedBotSessionTabId(tab?.id, excludedBotSessionIds)).length
   return terminalTabs + (browserTabsByWorktree[worktreeId]?.length ?? 0)
 }
 
@@ -56,6 +54,7 @@ export function buildCodexSidebarModel(args: {
   botOwnedWorktreeIdentities?: ReadonlySet<string>
   excludedBotSessionIds?: ReadonlySet<string>
   worktreeLineageById?: Readonly<Record<string, WorktreeLineage | undefined>>
+  canonicalHostById?: ReadonlyMap<ExecutionHostId, ExecutionHostId>
   allThreads: readonly AgentPaneThread[]
   tabsByWorktree: Readonly<Record<string, readonly CodexTabLike[] | undefined>>
   browserTabsByWorktree: Readonly<Record<string, readonly unknown[] | undefined>>
@@ -171,12 +170,14 @@ export function buildCodexSidebarModel(args: {
       continue
     }
 
-    const worktreeItems: CodexProjectWorktreeItem[] = matchingWorktrees.map((wt) => {
+    const worktreesByHost = new Map<ExecutionHostId, CodexProjectWorktreeItem[]>()
+    for (const wt of matchingWorktrees) {
       const hostId = getWorktreeExecutionHostId(wt, repo, args.defaultHostId)
+      const canonicalHostId = args.canonicalHostById?.get(hostId) ?? hostId
       const openTabCount = countOpenTabs(wt.id, args.tabsByWorktree, args.browserTabsByWorktree, excludedBotSessionIds)
       const threadTone = toneByWorktreeId.get(wt.id) ?? 'idle'
       const branch = (wt.branch || '').replace(/^refs\/heads\//, '')
-      return {
+      const item: CodexProjectWorktreeItem = {
         id: wt.id,
         hostId,
         label: wt.displayName.trim() || branch || repo.displayName,
@@ -188,56 +189,57 @@ export function buildCodexSidebarModel(args: {
         statusTone: threadTone !== 'idle' ? threadTone : wt.isUnread ? 'active' : 'idle',
         lastActivityAt: Math.max(wt.lastActivityAt ?? 0, latestThreadAtByWorktreeId.get(wt.id) ?? 0)
       }
-    })
+      const list = worktreesByHost.get(canonicalHostId)
+      if (list) { list.push(item) } else { worktreesByHost.set(canonicalHostId, [item]) }
+    }
 
-    worktreeItems.sort(
-      (a, b) =>
-        Number(b.isPinned) - Number(a.isPinned) ||
-        b.lastActivityAt - a.lastActivityAt ||
-        Number(b.isMain) - Number(a.isMain) ||
-        a.label.localeCompare(b.label)
-    )
-
-    const primaryWorktree = worktreeItems.find((item) => item.isActive) ?? worktreeItems[0]
-    projects.push({
-      key: `repo:${repo.id}:${primaryWorktree.hostId}`,
-      kind: 'repo',
-      name: repo.displayName,
-      repo,
-      markRepo: repo,
-      primaryWorktree,
-      worktrees: worktreeItems,
-      openTabCount: worktreeItems.reduce((sum, item) => sum + item.openTabCount, 0),
-      isActive: worktreeItems.some((item) => item.isActive),
-      isPinned: worktreeItems.some((item) => item.isPinned),
-      statusTone: worktreeItems.reduce<CodexActivityTone>((acc, item) => higherCodexTone(acc, item.statusTone), 'idle'),
-      lastActivityAt: worktreeItems.reduce((max, item) => Math.max(max, item.lastActivityAt), 0),
-      addedAt: repo.addedAt
-    })
-
-    for (const item of worktreeItems) {
-      if (worktreeIdsWithThread.has(item.id) || (item.openTabCount === 0 && item.lastActivityAt <= 0 && !item.isActive)) {
-        continue
-      }
-      allRecentRows.push(
-        makeCodexFallbackRecentRow({
-          title: item.label === repo.displayName && item.branch ? `${repo.displayName} · ${item.branch}` : item.label,
-          projectName: repo.displayName,
-          worktreeId: item.id,
-          hostId: item.hostId,
-          markRepo: repo,
-          statusTone: item.statusTone,
-          isActive: item.isActive,
-          isUnread: item.statusTone === 'active',
-          timestamp: item.lastActivityAt
-        })
+    for (const [canonicalHostId, worktreeItems] of worktreesByHost) {
+      worktreeItems.sort(
+        (a, b) => Number(b.isPinned) - Number(a.isPinned) || b.lastActivityAt - a.lastActivityAt || Number(b.isMain) - Number(a.isMain) || a.label.localeCompare(b.label)
       )
+      const primaryWorktree = worktreeItems.find((item) => item.isActive) ?? worktreeItems[0]
+      projects.push({
+        key: `repo:${repo.id}:${canonicalHostId}`,
+        kind: 'repo',
+        hostId: canonicalHostId,
+        name: repo.displayName,
+        repo,
+        markRepo: repo,
+        primaryWorktree,
+        worktrees: worktreeItems,
+        openTabCount: worktreeItems.reduce((sum, item) => sum + item.openTabCount, 0),
+        isActive: worktreeItems.some((item) => item.isActive),
+        isPinned: worktreeItems.some((item) => item.isPinned),
+        statusTone: worktreeItems.reduce<CodexActivityTone>((acc, item) => higherCodexTone(acc, item.statusTone), 'idle'),
+        lastActivityAt: worktreeItems.reduce((max, item) => Math.max(max, item.lastActivityAt), 0),
+        addedAt: repo.addedAt
+      })
+
+      for (const item of worktreeItems) {
+        if (worktreeIdsWithThread.has(item.id) || (item.openTabCount === 0 && item.lastActivityAt <= 0 && !item.isActive)) {
+          continue
+        }
+        allRecentRows.push(
+          makeCodexFallbackRecentRow({
+            title: item.label === repo.displayName && item.branch ? `${repo.displayName} · ${item.branch}` : item.label,
+            projectName: repo.displayName,
+            worktreeId: item.id,
+            hostId: item.hostId,
+            markRepo: repo,
+            statusTone: item.statusTone,
+            isActive: item.isActive,
+            isUnread: item.statusTone === 'active',
+            timestamp: item.lastActivityAt
+          })
+        )
+      }
     }
   }
 
   for (const folder of visibleFolders) {
     const wtId = folderWorkspaceKey(folder.id)
     const hostId = getFolderWorkspaceWorktreeHostId(folder)
+    const canonicalHostId = args.canonicalHostById?.get(hostId) ?? hostId
     const markRepo = folderMarkByWorktreeId.get(wtId) ?? buildFolderRepoMark(folder)
     const openTabCount = countOpenTabs(wtId, args.tabsByWorktree, args.browserTabsByWorktree, excludedBotSessionIds)
     const threadTone = toneByWorktreeId.get(wtId) ?? 'idle'
@@ -260,6 +262,7 @@ export function buildCodexSidebarModel(args: {
     projects.push({
       key: `folder:${folder.id}`,
       kind: 'folder',
+      hostId: canonicalHostId,
       name: folder.name,
       repo: null,
       markRepo,
@@ -291,23 +294,14 @@ export function buildCodexSidebarModel(args: {
   }
 
   projects.sort(
-    (a, b) =>
-      Number(b.isPinned) - Number(a.isPinned) ||
-      b.lastActivityAt - a.lastActivityAt ||
-      b.addedAt - a.addedAt ||
-      a.name.localeCompare(b.name)
+    (a, b) => Number(b.isPinned) - Number(a.isPinned) || b.lastActivityAt - a.lastActivityAt || b.addedAt - a.addedAt || a.name.localeCompare(b.name)
   )
   allRecentRows.sort(
-    (a, b) =>
-      b.timestamp - a.timestamp ||
-      CODEX_TONE_PRIORITY[b.statusTone] - CODEX_TONE_PRIORITY[a.statusTone] ||
-      a.title.localeCompare(b.title)
+    (a, b) => b.timestamp - a.timestamp || CODEX_TONE_PRIORITY[b.statusTone] - CODEX_TONE_PRIORITY[a.statusTone] || a.title.localeCompare(b.title)
   )
 
   const recentItems = args.onlyActiveRecent
-    ? allRecentRows.filter(
-        (row) => row.statusTone === 'working' || row.statusTone === 'attention' || row.isUnread || row.isActive
-      )
+    ? allRecentRows.filter((row) => row.statusTone === 'working' || row.statusTone === 'attention' || row.isUnread || row.isActive)
     : allRecentRows
 
   return { projects, recentItems, totalRecentCount: allRecentRows.length }

@@ -7,6 +7,7 @@ import {
   normalizeSidebarZoneOrder
 } from './sidebar-four-zone-model'
 import { buildCodexSidebarModel, formatCodexRelativeTime } from './sidebar-codex-model'
+import { groupCodexProjectsByHost, resolveCodexZoneHostMeta } from './sidebar-codex-host-groups'
 import { botOwnChatTree, type BotChatTreeChat, type BotChatTreeWorker } from '../../../../../shared/bots/bot-chat-tree'
 import { botChatSearchHits } from '../../../../../shared/bots/bot-chat-tree-view'
 import type { Repo } from '../../../../../shared/repository/repo-types'
@@ -416,6 +417,49 @@ describe('buildCodexSidebarModel', () => {
       homeChat
     )
     expect(searchHits).toEqual([])
+  })
+
+  it('separates local Mac and remote Mac projects into distinct host sections', () => {
+    const localMac = 'local' as ExecutionHostId
+    const remoteMac = 'runtime:mac-mini' as ExecutionHostId
+    const hostMeta = resolveCodexZoneHostMeta(
+      [
+        { id: localMac, label: 'This Mac', kind: 'local', health: 'local' },
+        { id: remoteMac, label: 'Mac Mini 远程', kind: 'runtime', health: 'available' }
+      ],
+      [localMac, remoteMac]
+    )
+    expect(hostMeta.multiHost).toBe(true)
+    expect(hostMeta.hosts.map((h) => `${h.label}:${h.tag}`)).toEqual([
+      'This Mac:本地',
+      'Mac Mini 远程:远程'
+    ])
+
+    const repoLocal = makeRepo({ id: 'r-local', displayName: '手机专区', executionHostId: localMac })
+    const repoRemote = makeRepo({ id: 'r-remote', displayName: '复盘专项', executionHostId: remoteMac })
+    const model = buildCodexSidebarModel({
+      repos: [repoLocal, repoRemote],
+      worktreesByRepo: {
+        'r-local': [makeWorktree({ id: 'wt-l', repoId: 'r-local', hostId: localMac, lastActivityAt: 1000 })],
+        'r-remote': [makeWorktree({ id: 'wt-r', repoId: 'r-remote', hostId: remoteMac, lastActivityAt: 2000 })]
+      },
+      folderWorkspaces: [],
+      botHomeOwners: [],
+      canonicalHostById: hostMeta.canonicalHostById,
+      allThreads: [],
+      tabsByWorktree: {},
+      browserTabsByWorktree: {},
+      hostIds: [localMac, remoteMac],
+      defaultHostId: localMac,
+      activeWorktreeId: null,
+      selectedPaneKey: null,
+      onlyActiveRecent: false
+    })
+
+    const sections = groupCodexProjectsByHost(model.projects, hostMeta)
+    expect(sections.map((s) => s.host.tag)).toEqual(['本地', '远程'])
+    expect(sections[0].projects.map((p) => p.name)).toEqual(['手机专区'])
+    expect(sections[1].projects.map((p) => p.name)).toEqual(['复盘专项'])
   })
 
   it('formats concise Chinese/short relative timestamps', () => {

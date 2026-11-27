@@ -22,6 +22,8 @@ import {
   type ExecutionHostId
 } from '../../../../../shared/execution-host/execution-host'
 import { collectExcludedBotSessionIds } from './sidebar-codex-bot-filter'
+import { useSidebarHostScopeOptions } from '../worktree-list/controls/use-sidebar-host-scope-options'
+import { groupCodexProjectsByHost, resolveCodexZoneHostMeta } from './sidebar-codex-host-groups'
 import { buildCodexSidebarModel, type CodexProjectRow, type CodexRecentRow } from './sidebar-codex-model'
 import { CodexProjectRowItem, CodexRecentRowItem } from './SidebarPlatformCodexRows'
 
@@ -58,10 +60,17 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
   const { allThreads } = useAllAgentPaneThreads()
 
   const [expandedProjects, setExpandedProjects] = useState<ReadonlySet<string>>(() => new Set())
+  const [collapsedHosts, setCollapsedHosts] = useState<ReadonlySet<string>>(() => new Set())
   const [recentCollapsed, setRecentCollapsed] = useState(false)
   const [onlyActiveRecent, setOnlyActiveRecent] = useState(false)
   const [showAllRecent, setShowAllRecent] = useState(false)
   const [selectedPaneKey, setSelectedPaneKey] = useState<string | null>(null)
+
+  const { hostOptions } = useSidebarHostScopeOptions()
+  const hostMeta = useMemo(
+    () => resolveCodexZoneHostMeta(hostOptions, hostIds),
+    [hostOptions, hostIds]
+  )
 
   const defaultHostId = getSettingsFocusedExecutionHostId(settings)
   const botHomeOwners = useMemo(() => [...bots, ...botGroups], [bots, botGroups])
@@ -93,6 +102,7 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
         botOwnedWorktreeIdentities,
         excludedBotSessionIds,
         worktreeLineageById,
+        canonicalHostById: hostMeta.canonicalHostById,
         allThreads,
         tabsByWorktree,
         browserTabsByWorktree,
@@ -110,6 +120,7 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
       botOwnedWorktreeIdentities,
       excludedBotSessionIds,
       worktreeLineageById,
+      hostMeta.canonicalHostById,
       allThreads,
       tabsByWorktree,
       browserTabsByWorktree,
@@ -120,6 +131,23 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
       onlyActiveRecent
     ]
   )
+
+  const projectHostSections = useMemo(
+    () => (hostMeta.multiHost ? groupCodexProjectsByHost(model.projects, hostMeta) : null),
+    [hostMeta, model.projects]
+  )
+
+  const toggleHostCollapsed = useCallback((hostId: string) => {
+    setCollapsedHosts((prev) => {
+      const next = new Set(prev)
+      if (next.has(hostId)) {
+        next.delete(hostId)
+      } else {
+        next.add(hostId)
+      }
+      return next
+    })
+  }, [])
 
   const threadsRef = useRef(allThreads)
   threadsRef.current = allThreads
@@ -235,19 +263,73 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
         </Tooltip>
       </div>
 
-      <div className="flex flex-col gap-0.5">
-        {model.projects.map((project) => (
-          <CodexProjectRowItem
-            key={project.key}
-            project={project}
-            anyExpandable={anyExpandable}
-            isExpanded={expandedProjects.has(project.key)}
-            onToggleExpand={toggleProjectExpanded}
-            onActivateWorktree={handleActivateWorktree}
-            onCreateWorkspace={handleProjectCreate}
-          />
-        ))}
-      </div>
+      {projectHostSections ? (
+        <div className="flex flex-col gap-2">
+          {projectHostSections.map(({ host, projects }) => {
+            const hostCollapsed = collapsedHosts.has(host.hostId)
+            const dotClass =
+              host.health === 'local' || host.health === 'available'
+                ? 'bg-emerald-500'
+                : host.health === 'connecting' ||
+                    host.health === 'waking' ||
+                    host.health === 'provisioning'
+                  ? 'bg-amber-500 animate-pulse'
+                  : 'bg-muted-foreground/45'
+            return (
+              <div key={host.hostId} className="flex flex-col gap-0.5">
+                <button
+                  type="button"
+                  onClick={() => toggleHostCollapsed(host.hostId)}
+                  className="flex h-6 items-center gap-1.5 rounded px-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-worktree-sidebar-foreground/6 hover:text-foreground"
+                >
+                  {hostCollapsed ? (
+                    <ChevronRight className="size-3 shrink-0" />
+                  ) : (
+                    <ChevronDown className="size-3 shrink-0" />
+                  )}
+                  <span aria-hidden className={cn('size-1.5 shrink-0 rounded-full', dotClass)} />
+                  <span className="min-w-0 truncate">{host.label}</span>
+                  <span className="shrink-0 rounded bg-worktree-sidebar-foreground/6 px-1 py-0.5 text-[10px] leading-none text-muted-foreground/90">
+                    {host.tag}
+                  </span>
+                  <span className="ml-auto shrink-0 text-[10px] tabular-nums opacity-70">
+                    {projects.length}
+                  </span>
+                </button>
+                {!hostCollapsed ? (
+                  <div className="flex flex-col gap-0.5">
+                    {projects.map((project) => (
+                      <CodexProjectRowItem
+                        key={project.key}
+                        project={project}
+                        anyExpandable={anyExpandable}
+                        isExpanded={expandedProjects.has(project.key)}
+                        onToggleExpand={toggleProjectExpanded}
+                        onActivateWorktree={handleActivateWorktree}
+                        onCreateWorkspace={handleProjectCreate}
+                      />
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            )
+          })}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-0.5">
+          {model.projects.map((project) => (
+            <CodexProjectRowItem
+              key={project.key}
+              project={project}
+              anyExpandable={anyExpandable}
+              isExpanded={expandedProjects.has(project.key)}
+              onToggleExpand={toggleProjectExpanded}
+              onActivateWorktree={handleActivateWorktree}
+              onCreateWorkspace={handleProjectCreate}
+            />
+          ))}
+        </div>
+      )}
 
       <div className="mt-4 flex items-center justify-between px-1.5 py-1">
         <button
@@ -306,9 +388,18 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
           </p>
         ) : (
           <div className="flex flex-col gap-0.5">
-            {visibleRecentItems.map((item) => (
-              <CodexRecentRowItem key={item.key} item={item} onSelect={handleSelectRecent} />
-            ))}
+            {visibleRecentItems.map((item) => {
+              const hostInfo = hostMeta.multiHost ? hostMeta.hostInfoById.get(item.hostId) : undefined
+              const hostTag = hostInfo ? (hostInfo.isLocal ? '本地' : hostInfo.label) : undefined
+              return (
+                <CodexRecentRowItem
+                  key={item.key}
+                  item={item}
+                  hostTag={hostTag}
+                  onSelect={handleSelectRecent}
+                />
+              )
+            })}
             {hiddenRecentCount > 0 ? (
               <button
                 type="button"

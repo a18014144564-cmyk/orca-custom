@@ -154,9 +154,11 @@ export function CodexProjectRowItem({
 
 export function CodexRecentRowItem({
   item,
+  hostTag,
   onSelect
 }: {
   item: CodexRecentRow
+  hostTag?: string
   onSelect: (item: CodexRecentRow) => void
 }): React.JSX.Element {
   const relTime = formatCodexRelativeTime(item.timestamp)
@@ -164,7 +166,7 @@ export function CodexRecentRowItem({
     <button
       type="button"
       onClick={() => onSelect(item)}
-      title={`${item.projectName} · ${item.title}`}
+      title={hostTag ? `[${hostTag}] ${item.projectName} · ${item.title}` : `${item.projectName} · ${item.title}`}
       className={cn(
         'flex h-7 items-center gap-2 rounded-md px-1.5 text-left text-[13px] transition-colors',
         item.isActive
@@ -177,6 +179,11 @@ export function CodexRecentRowItem({
         <CodexStatusCornerDot tone={item.statusTone} />
       </span>
       <span className="min-w-0 flex-1 truncate">{item.title}</span>
+      {hostTag ? (
+        <span className="shrink-0 rounded bg-worktree-sidebar-foreground/6 px-1 py-0.5 text-[10px] leading-none text-muted-foreground">
+          {hostTag}
+        </span>
+      ) : null}
       {relTime ? (
         <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground/70">{relTime}</span>
       ) : null}
