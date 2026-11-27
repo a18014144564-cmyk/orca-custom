@@ -11,6 +11,19 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Compute unique build tag
+        id: meta
+        run: |
+          STAMP=$(TZ='Asia/Shanghai' date +%m%d-%H%M)
+          SHORT_SHA="${GITHUB_SHA::7}"
+          BUILD_TAG="b${GITHUB_RUN_NUMBER}-${STAMP}-${SHORT_SHA}"
+          VERSION_CODE=$((35 + GITHUB_RUN_NUMBER))
+          BASE_VERSION=$(node -p "require('./mobile/app.json').expo.version")
+          echo "build_tag=${BUILD_TAG}" >> "$GITHUB_OUTPUT"
+          echo "version_code=${VERSION_CODE}" >> "$GITHUB_OUTPUT"
+          echo "version_name=${BASE_VERSION}-${BUILD_TAG}" >> "$GITHUB_OUTPUT"
+          echo "APK build tag: ${BUILD_TAG} (versionName=${BASE_VERSION}-${BUILD_TAG}, versionCode=${VERSION_CODE})"
+
       - name: Setup JDK 17
         uses: actions/setup-java@v4
         with:
@@ -38,6 +51,8 @@ jobs:
         working-directory: mobile
         env:
           ORCA_ANDROID_DISABLE_GOOGLE_SERVICES: 'true'
+          ORCA_ANDROID_VERSION_NAME: ${{ steps.meta.outputs.version_name }}
+          ORCA_BUILD_VERSION_CODE: ${{ steps.meta.outputs.version_code }}
           NODE_OPTIONS: --max-old-space-size=4096
         run: npx expo prebuild --platform android --clean --no-install
 
@@ -49,12 +64,13 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a,armeabi-v7a
-          cp app/build/outputs/apk/release/app-release.apk ../orca-reset-android.apk
-          ls -lh ../orca-reset-android.apk
+          OUT_APK="../orca-reset-android-${{ steps.meta.outputs.build_tag }}.apk"
+          cp app/build/outputs/apk/release/app-release.apk "$OUT_APK"
+          ls -lh "$OUT_APK"
 
       - name: Upload Android APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Orca-Reset-android-apk
-          path: mobile/orca-reset-android.apk
+          name: Orca-Reset-Android-${{ steps.meta.outputs.build_tag }}
+          path: mobile/orca-reset-android-${{ steps.meta.outputs.build_tag }}.apk
           retention-days: 14

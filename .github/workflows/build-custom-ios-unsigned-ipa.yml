@@ -16,6 +16,17 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Compute unique build tag
+        id: meta
+        run: |
+          STAMP=$(TZ='Asia/Shanghai' date +%m%d-%H%M)
+          SHORT_SHA="${GITHUB_SHA::7}"
+          BUILD_TAG="b${GITHUB_RUN_NUMBER}-${STAMP}-${SHORT_SHA}"
+          VERSION_CODE=$((35 + GITHUB_RUN_NUMBER))
+          echo "build_tag=${BUILD_TAG}" >> "$GITHUB_OUTPUT"
+          echo "version_code=${VERSION_CODE}" >> "$GITHUB_OUTPUT"
+          echo "iOS build tag: ${BUILD_TAG} (buildNumber=${VERSION_CODE})"
+
       - name: Select newest available Xcode
         run: |
           ls -d /Applications/Xcode*.app
@@ -45,6 +56,7 @@ jobs:
         working-directory: mobile
         env:
           ORCA_IOS_APS_ENVIRONMENT: development
+          ORCA_BUILD_VERSION_CODE: ${{ steps.meta.outputs.version_code }}
           NODE_OPTIONS: --max-old-space-size=4096
         run: npx expo prebuild --platform ios --clean --no-install
 
@@ -73,11 +85,11 @@ jobs:
         run: |
           mkdir -p Payload
           cp -R build/Build/Products/Release-iphoneos/Orca.app Payload/
-          zip -r -y ../orca-reset-unsigned.ipa Payload
+          zip -r -y ../orca-reset-ios-${{ steps.meta.outputs.build_tag }}.ipa Payload
 
       - name: Upload Unsigned IPA Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Orca-Reset-unsigned-ipa
-          path: mobile/orca-reset-unsigned.ipa
+          name: Orca-Reset-iOS-${{ steps.meta.outputs.build_tag }}
+          path: mobile/orca-reset-ios-${{ steps.meta.outputs.build_tag }}.ipa
           retention-days: 14

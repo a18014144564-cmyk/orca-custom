@@ -24,6 +24,16 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Compute unique build tag
+        id: meta
+        shell: pwsh
+        run: |
+          $stamp = [DateTimeOffset]::UtcNow.ToOffset([TimeSpan]::FromHours(8)).ToString('MMdd-HHmm')
+          $shortSha = $env:GITHUB_SHA.Substring(0, 7)
+          $tag = "b$($env:GITHUB_RUN_NUMBER)-$stamp-$shortSha"
+          "build_tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          Write-Host "Windows build tag: $tag"
+
       - name: Setup Node.js 24
         uses: actions/setup-node@v4
         with:
@@ -53,7 +63,7 @@ jobs:
       - name: Upload Windows Installer Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Orca-Reset-Windows
+          name: Orca-Reset-Windows-${{ steps.meta.outputs.build_tag }}
           path: |
             dist/*.exe
             dist/*.blockmap
@@ -71,6 +81,15 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Compute unique build tag
+        id: meta
+        run: |
+          STAMP=$(TZ='Asia/Shanghai' date +%m%d-%H%M)
+          SHORT_SHA="${GITHUB_SHA::7}"
+          BUILD_TAG="b${GITHUB_RUN_NUMBER}-${STAMP}-${SHORT_SHA}"
+          echo "build_tag=${BUILD_TAG}" >> "$GITHUB_OUTPUT"
+          echo "macOS build tag: ${BUILD_TAG}"
 
       - name: Setup Node.js 24
         uses: actions/setup-node@v4
@@ -101,7 +120,7 @@ jobs:
       - name: Upload macOS Installer Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Orca-Reset-macOS
+          name: Orca-Reset-macOS-${{ steps.meta.outputs.build_tag }}
           path: |
             dist/*.dmg
             dist/*.zip
