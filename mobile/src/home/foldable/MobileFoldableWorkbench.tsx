@@ -1,14 +1,11 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { View } from 'react-native'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../src/shared/execution-host/execution-host'
 import type { AgentListRow } from '../../agents/agent-list-rows'
 import { botHomeWorktreeId, ensureBotHomeChat } from '../../bots/host-bots-read'
 import { botPlaceClient } from '../../bots/use-open-bot-home'
 import type { HostCatalogEntry } from '../../host-catalog/host-profile'
-import {
-  useFoldableRailThumbBottom,
-  type FoldablePostureMetrics
-} from '../../layout/foldable-posture'
+import type { FoldablePostureMetrics } from '../../layout/foldable-posture'
 import { newWorkspaceOverlayHref } from '../../new-workspace/new-workspace-overlay-route'
 import { triggerMediumImpact } from '../../platform/haptics/haptics'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
@@ -20,11 +17,9 @@ import { MobileHomeBotsTab } from '../tabs/MobileHomeBotsTab'
 import { MobileHomeProjectsTab } from '../tabs/MobileHomeProjectsTab'
 import { MobileHomeTeamsTab } from '../tabs/MobileHomeTeamsTab'
 import { MobileHomeUsageTab } from '../tabs/MobileHomeUsageTab'
-import type { MobileProjectsPlatform } from '../tabs/mobile-four-zone'
-import {
-  foldableStageHref,
-  type FoldableStageTarget
-} from './foldable-stage-types'
+import { collectBotHomeWorktreeIds, type MobileProjectsPlatform } from '../tabs/mobile-four-zone'
+import { isExcludedMobileBotOrWorkerRow } from '../tabs/mobile-codex-projects'
+import { foldableStageHref, type FoldableStageTarget } from './foldable-stage-types'
 import { mobileFoldableStyles as styles } from './mobile-foldable-styles'
 import { MobileFoldableRail } from './MobileFoldableRail'
 import { MobileFoldableStage } from './MobileFoldableStage'
@@ -57,19 +52,16 @@ export function MobileFoldableWorkbench(props: {
   onToggleClassicLayout: () => void
 }) {
   const { foldable, data, stageTarget, onChangeStageTarget } = props
-  const { thumbBottom, toggleThumbBottom } = useFoldableRailThumbBottom()
   const [midCollapsed, setMidCollapsed] = useState(false)
   const [splitActive, setSplitActive] = useState(false)
   const [tabletopDismissed, setTabletopDismissed] = useState(false)
 
-  // Reset manual tabletop override whenever the device leaves half-opened posture.
   useEffect(() => {
     if (!foldable.isTabletop && tabletopDismissed) {
       setTabletopDismissed(false)
     }
   }, [foldable.isTabletop, tabletopDismissed])
 
-  // Auto-seed the right stage with the top active single-chat agent so unfolded Magic V6 is never empty.
   useEffect(() => {
     if (stageTarget != null) {
       return
@@ -78,6 +70,7 @@ export function MobileFoldableWorkbench(props: {
     if (firstActive) {
       onChangeStageTarget({
         kind: 'session',
+        source: 'project',
         hostId: firstActive.hostId,
         worktreeId: firstActive.entry.worktreeId,
         name: firstActive.entry.workspaceName || firstActive.title,
@@ -87,34 +80,92 @@ export function MobileFoldableWorkbench(props: {
     }
   }, [data.activeAgents, data.agentsNeedingYou, onChangeStageTarget, stageTarget])
 
+  // Build quick-pick candidates (Projects + Bots + Teams) for right-pane "双开".
+  const secondaryCandidates = useMemo<FoldableStageTarget[]>(() => {
+    const list: FoldableStageTarget[] = []
+    const botHomeIds = collectBotHomeWorktreeIds(data.bots.rows)
+    for (const host of data.connectedHosts) {
+      const info = data.worktreeInfo[host.id]
+      for (const row of info?.rows ?? []) {
+        if (isExcludedMobileBotOrWorkerRow(row, botHomeIds, info?.workspaceLineage)) {
+          continue
+        }
+        list.push({
+          kind: 'session',
+          source: 'project',
+          hostId: host.id,
+          worktreeId: row.worktreeId,
+          name: row.displayName?.trim() || row.repo
+        })
+      }
+    }
+    for (const row of data.bots.rows) {
+      if (row.offline) {
+        continue
+      }
+      if (row.kind === 'group') {
+        list.push({
+          kind: 'group',
+          hostId: row.pairedHostId,
+          groupId: row.group.id,
+          worktreeId: botHomeWorktreeId(row.group),
+          name: row.group.name
+        })
+      } else {
+        list.push({
+          kind: 'session',
+          source: 'bot',
+          hostId: row.pairedHostId,
+          worktreeId: botHomeWorktreeId(row.bot),
+          name: row.bot.name,
+          ...(row.executionHost !== LOCAL_EXECUTION_HOST_ID
+            ? { executionHost: row.executionHost }
+            : {})
+        })
+      }
+    }
+    return list
+  }, [data.bots.rows, data.connectedHosts, data.worktreeInfo])
+
   const handleOpenWorktreeInStage = useCallback(
     (host: HostCatalogEntry, row: Worktree) => {
-      if (host.credentialStatus === 'missing' || host.credentialStatus === 'temporarily-unavailable') {
+      if (
+        host.credentialStatus === 'missing' ||
+        host.credentialStatus === 'temporarily-unavailable'
+      ) {
         props.onOpenHost(host)
         return
       }
       onChangeStageTarget({
         kind: 'session',
+        source: 'project',
         hostId: host.id,
         worktreeId: row.worktreeId,
         name: row.displayName?.trim() || row.repo
       })
+      if (splitActive) {
+        setMidCollapsed(true)
+      }
     },
-    [onChangeStageTarget, props]
+    [onChangeStageTarget, props, splitActive]
   )
 
   const handleOpenAgentInStage = useCallback(
     (row: AgentListRow) => {
       onChangeStageTarget({
         kind: 'session',
+        source: 'project',
         hostId: row.hostId,
         worktreeId: row.entry.worktreeId,
         name: row.entry.workspaceName || row.title,
         paneKey: row.entry.agent.paneKey,
         executionHost: row.entry.executionHost?.id
       })
+      if (splitActive) {
+        setMidCollapsed(true)
+      }
     },
-    [onChangeStageTarget]
+    [onChangeStageTarget, splitActive]
   )
 
   const handleOpenBotInStage = useCallback(
@@ -123,19 +174,24 @@ export function MobileFoldableWorkbench(props: {
         return
       }
       if (row.kind === 'group') {
-        setSplitActive(false)
+        // Keep splitActive alive so Team chat works seamlessly in "左聊右看"!
         onChangeStageTarget({
           kind: 'group',
           hostId: row.pairedHostId,
           groupId: row.group.id,
+          worktreeId: botHomeWorktreeId(row.group),
           name: row.group.name
         })
+        if (splitActive) {
+          setMidCollapsed(true)
+        }
         return
       }
       const client = props.clientOf(row.pairedHostId)
       const place = { pairedHostId: row.pairedHostId, executionHost: row.executionHost }
       const target: FoldableStageTarget = {
         kind: 'session',
+        source: 'bot',
         hostId: row.pairedHostId,
         worktreeId: botHomeWorktreeId(row.bot),
         name: row.bot.name,
@@ -143,15 +199,19 @@ export function MobileFoldableWorkbench(props: {
           ? { executionHost: row.executionHost }
           : {})
       }
-      if (client) {
-        void ensureBotHomeChat(botPlaceClient(client, place), row.bot.id).then(() =>
-          onChangeStageTarget(target)
-        )
-      } else {
+      const commit = () => {
         onChangeStageTarget(target)
+        if (splitActive) {
+          setMidCollapsed(true)
+        }
+      }
+      if (client) {
+        void ensureBotHomeChat(botPlaceClient(client, place), row.bot.id).then(commit)
+      } else {
+        commit()
       }
     },
-    [onChangeStageTarget, props]
+    [onChangeStageTarget, props, splitActive]
   )
 
   const handleOpenFullScreen = useCallback(
@@ -187,27 +247,21 @@ export function MobileFoldableWorkbench(props: {
   }
 
   const isUsageTab = props.activeTab === 'usage'
-  const showMidPane = !isUsageTab && !midCollapsed && !splitActive
+  const showMidPane = !isUsageTab && !midCollapsed
 
   const handleToggleSplit = () => {
     triggerMediumImpact()
+    if (isUsageTab) {
+      props.onSelectTab('teams')
+    }
     setSplitActive((prev) => {
       const next = !prev
-      if (next) {
-        setMidCollapsed(true)
-      } else {
-        setMidCollapsed(false)
-      }
+      setMidCollapsed(next)
       return next
     })
   }
 
   const handleToggleMid = () => {
-    if (splitActive) {
-      setSplitActive(false)
-      setMidCollapsed(false)
-      return
-    }
     setMidCollapsed((prev) => !prev)
   }
 
@@ -216,22 +270,20 @@ export function MobileFoldableWorkbench(props: {
       <MobileFoldableRail
         tabs={props.fourZoneTabOrder}
         active={props.activeTab}
-        thumbBottom={thumbBottom}
-        midCollapsed={midCollapsed || splitActive}
+        midCollapsed={midCollapsed}
+        splitActive={splitActive}
         teamsBadge={props.teamsBadge}
         botsBadge={props.soloBotsBadge}
         projectsBadge={props.projectsBadge}
         onSelect={(next) => {
           props.onSelectTab(next)
-          if (next !== 'usage' && splitActive) {
-            setSplitActive(false)
+          if (next !== 'usage') {
             setMidCollapsed(false)
           }
         }}
         onLongPressTab={props.onLongPressTab}
-        onToggleThumbBottom={toggleThumbBottom}
+        onToggleSplit={handleToggleSplit}
         onToggleMidCollapsed={handleToggleMid}
-        onToggleClassicLayout={props.onToggleClassicLayout}
         onOpenSettings={props.onOpenSettings}
       />
 
@@ -291,6 +343,7 @@ export function MobileFoldableWorkbench(props: {
 
           <MobileFoldableStage
             target={stageTarget}
+            secondaryCandidates={secondaryCandidates}
             midCollapsed={midCollapsed}
             splitActive={splitActive}
             hingeGap={foldable.hingeGap}

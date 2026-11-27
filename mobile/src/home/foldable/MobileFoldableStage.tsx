@@ -1,21 +1,25 @@
 import {
   Columns2,
-  FileCode2,
   FolderOpen,
   GitCompareArrows,
-  Maximize2,
+  Globe,
   MessageSquare,
   PanelLeft,
-  TerminalSquare
+  PlusSquare,
+  RefreshCw,
+  SquareTerminal
 } from 'lucide-react-native'
 import { useMemo, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { colors } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { FoldableBrowserPane } from './FoldableBrowserPane'
 import { FoldableHostShellPane } from './FoldableHostShellPane'
+import { FoldableSecondaryPicker } from './FoldableSecondaryPicker'
 import {
   buildFoldableAuxRoute,
   buildFoldableStageRoute,
+  foldableStageBadge,
   foldableStageKey,
   type FoldableAuxMode,
   type FoldableStageTarget
@@ -25,17 +29,19 @@ import { mobileFoldableStyles as styles } from './mobile-foldable-styles'
 const AUX_TABS: readonly {
   id: FoldableAuxMode
   label: string
-  icon: typeof GitCompareArrows
+  icon: typeof Globe
 }[] = [
-  { id: 'diff', label: 'Diff', icon: GitCompareArrows },
+  { id: 'browser', label: '浏览器', icon: Globe },
+  { id: 'terminal', label: '终端', icon: SquareTerminal },
   { id: 'files', label: '文件', icon: FolderOpen },
-  { id: 'review', label: '审查', icon: FileCode2 },
-  { id: 'session', label: '双开', icon: TerminalSquare }
+  { id: 'diff', label: 'Diff', icon: GitCompareArrows },
+  { id: 'pick', label: '双开', icon: PlusSquare }
 ]
 
-/** Unfolded right-hand workbench stage with live WebShell + 50/50 hinge-aware "左聊右看" split view. */
+/** Unfolded Magic V6 stage: ANY chat (Team / Bot / Project) on the left + Browser / Terminal / Files / Diff / Second Chat on the right. */
 export function MobileFoldableStage(props: {
   target: FoldableStageTarget | null
+  secondaryCandidates: readonly FoldableStageTarget[]
   midCollapsed: boolean
   splitActive: boolean
   hingeGap: number
@@ -45,25 +51,36 @@ export function MobileFoldableStage(props: {
 }) {
   useMobileColorScheme()
   const { target, splitActive, hingeGap } = props
-  const [auxMode, setAuxMode] = useState<FoldableAuxMode>('diff')
+  const [auxMode, setAuxMode] = useState<FoldableAuxMode>('browser')
+  const [secondaryTarget, setSecondaryTarget] = useState<FoldableStageTarget | null>(null)
 
   const stageRoute = useMemo(
     () => (target ? buildFoldableStageRoute(target) : null),
     [target]
   )
-  const auxRoute = useMemo(
-    () => (target && target.kind === 'session' && splitActive ? buildFoldableAuxRoute(target, auxMode) : null),
-    [auxMode, splitActive, target]
-  )
+
+  // Right-side Orca route for terminal / files / diff (works for Projects, Bots, AND Bot Teams via folderWorkspaceId).
+  const auxRoute = useMemo(() => {
+    if (!target || !splitActive) {
+      return null
+    }
+    if (auxMode === 'terminal' || auxMode === 'files' || auxMode === 'diff') {
+      return buildFoldableAuxRoute(target, auxMode)
+    }
+    if (auxMode === 'pick' && secondaryTarget) {
+      return buildFoldableStageRoute(secondaryTarget)
+    }
+    return null
+  }, [auxMode, secondaryTarget, splitActive, target])
 
   if (!target || !stageRoute) {
     return (
       <View style={styles.stageRoot}>
         <View style={styles.emptyStage}>
           <MessageSquare size={32} color={colors.textMuted} strokeWidth={1.6} />
-          <Text style={styles.emptyStageTitle}>折叠屏工作台已就绪</Text>
+          <Text style={styles.emptyStageTitle}>点左侧任意团队、Bot 或项目开始</Text>
           <Text style={styles.emptyStageBody}>
-            点击左侧任意项目、最近单聊或 Bot 团队，右侧将原地实时打开；展开状态下还支持「左聊右看」双栏分屏看 Diff 与文件。
+            打开后点右上角「左聊右看」，即可左边聊天、右边直接开浏览器、终端、文件或第二个窗口。
           </Text>
         </View>
       </View>
@@ -71,67 +88,103 @@ export function MobileFoldableStage(props: {
   }
 
   const stageKey = foldableStageKey(target)
-  const canSplit = target.kind === 'session'
-  const showSplit = canSplit && splitActive && auxRoute != null
+  const badge = foldableStageBadge(target)
+
+  const renderRightPaneBody = () => {
+    if (auxMode === 'browser') {
+      return <FoldableBrowserPane />
+    }
+    if (auxMode === 'pick') {
+      if (!secondaryTarget || !auxRoute) {
+        return (
+          <FoldableSecondaryPicker
+            candidates={props.secondaryCandidates}
+            selected={secondaryTarget}
+            onPick={setSecondaryTarget}
+          />
+        )
+      }
+      return (
+        <View style={styles.stagePane}>
+          <View style={styles.secondaryHeader}>
+            <Text style={styles.secondaryTitle} numberOfLines={1}>
+              {secondaryTarget.name}
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setSecondaryTarget(null)}
+              style={styles.secondarySwitchBtn}
+            >
+              <RefreshCw size={12} color={colors.textSecondary} />
+              <Text style={styles.secondarySwitchText}>更换窗口</Text>
+            </Pressable>
+          </View>
+          <FoldableHostShellPane
+            shellKey={`aux:pick:${foldableStageKey(secondaryTarget)}`}
+            hostId={secondaryTarget.hostId}
+            route={auxRoute}
+            onOpenFullScreen={() => props.onOpenFullScreen(secondaryTarget)}
+          />
+        </View>
+      )
+    }
+    if (!auxRoute) {
+      return (
+        <View style={styles.emptyStage}>
+          <Text style={styles.emptyStageTitle}>当前窗口未绑定工作区</Text>
+          <Text style={styles.emptyStageBody}>
+            可以切到「浏览器」直接使用，或点「双开」在右侧选择任意项目终端。
+          </Text>
+        </View>
+      )
+    }
+    return (
+      <FoldableHostShellPane
+        shellKey={`${stageKey}:aux:${auxMode}`}
+        hostId={target.hostId}
+        route={auxRoute}
+        onOpenFullScreen={() => props.onOpenFullScreen(target)}
+      />
+    )
+  }
 
   return (
     <View style={styles.stageRoot}>
       <View style={styles.stageBar}>
         <View style={styles.stageTitleWrap}>
+          <View style={styles.stageKindBadge}>
+            <Text style={styles.stageKindBadgeText}>{badge}</Text>
+          </View>
           <Text style={styles.stageTitle} numberOfLines={1}>
             {target.name}
           </Text>
         </View>
 
         <View style={styles.stageActions}>
-          {!showSplit ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={props.midCollapsed ? '展开左侧列表' : '收起左侧列表'}
-              onPress={props.onToggleMidCollapsed}
-              style={({ pressed }) => [
-                styles.stageChip,
-                props.midCollapsed && styles.stageChipActive,
-                pressed && styles.railButtonPressed
-              ]}
-            >
-              <PanelLeft
-                size={13}
-                color={props.midCollapsed ? colors.bgBase : colors.textSecondary}
-              />
-              <Text
-                style={[styles.stageChipText, props.midCollapsed && styles.stageChipTextActive]}
-              >
-                {props.midCollapsed ? '展开列表' : '全屏'}
-              </Text>
-            </Pressable>
-          ) : null}
-
-          {canSplit ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={showSplit ? '退出左聊右看分屏' : '开启左聊右看折痕分屏'}
-              onPress={props.onToggleSplit}
-              style={({ pressed }) => [
-                styles.stageChip,
-                showSplit && styles.stageChipActive,
-                pressed && styles.railButtonPressed
-              ]}
-            >
-              <Columns2 size={13} color={showSplit ? colors.bgBase : colors.textSecondary} />
-              <Text style={[styles.stageChipText, showSplit && styles.stageChipTextActive]}>
-                {showSplit ? '退出分屏' : '左聊右看'}
-              </Text>
-            </Pressable>
-          ) : null}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={props.midCollapsed ? '展开列表' : '收起列表'}
+            onPress={props.onToggleMidCollapsed}
+            style={({ pressed }) => [styles.stageChip, pressed && styles.railButtonPressed]}
+          >
+            <PanelLeft size={13} color={colors.textSecondary} />
+            <Text style={styles.stageChipText}>{props.midCollapsed ? '列表' : '收起'}</Text>
+          </Pressable>
 
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="独立页面打开"
-            onPress={() => props.onOpenFullScreen(target)}
-            style={({ pressed }) => [styles.stageChip, pressed && styles.railButtonPressed]}
+            accessibilityLabel={splitActive ? '退出左聊右看分屏' : '开启左聊右看分屏'}
+            onPress={props.onToggleSplit}
+            style={({ pressed }) => [
+              styles.splitCta,
+              splitActive && styles.splitCtaActive,
+              pressed && styles.railButtonPressed
+            ]}
           >
-            <Maximize2 size={13} color={colors.textSecondary} />
+            <Columns2 size={14} color={splitActive ? colors.onAccent : colors.accentBlue} />
+            <Text style={[styles.splitCtaText, splitActive && styles.splitCtaTextActive]}>
+              {splitActive ? '退出分屏' : '左聊右看'}
+            </Text>
           </Pressable>
         </View>
       </View>
@@ -146,7 +199,7 @@ export function MobileFoldableStage(props: {
           />
         </View>
 
-        {showSplit ? (
+        {splitActive ? (
           <>
             <View style={[styles.hingeDividerV, { width: Math.max(hingeGap, 12) }]}>
               <View style={styles.hingeHairlineV} />
@@ -175,14 +228,7 @@ export function MobileFoldableStage(props: {
                   )
                 })}
               </View>
-              <View style={styles.stagePane}>
-                <FoldableHostShellPane
-                  shellKey={`${stageKey}:aux:${auxMode}`}
-                  hostId={target.hostId}
-                  route={auxRoute}
-                  onOpenFullScreen={() => props.onOpenFullScreen(target)}
-                />
-              </View>
+              <View style={styles.stagePane}>{renderRightPaneBody()}</View>
             </View>
           </>
         ) : null}

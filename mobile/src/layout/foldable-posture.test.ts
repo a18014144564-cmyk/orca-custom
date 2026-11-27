@@ -98,8 +98,15 @@ describe('resolveFoldablePosture (Honor Magic V6 & Android foldables)', () => {
       kind: 'group' as const,
       hostId: 'win-1',
       groupId: 'grp-1',
+      worktreeId: 'folder:grp-1',
       name: '风神开发团队'
     }
     expect(buildFoldableStageRoute(groupTarget)?.pathname).toBe('/h/win-1/group/grp-1')
+    expect(buildFoldableAuxRoute(groupTarget, 'terminal')?.pathname).toBe(
+      '/h/win-1/session/folder%3Agrp-1'
+    )
+    expect(buildFoldableAuxRoute(groupTarget, 'files')?.pathname).toBe(
+      '/h/win-1/files/folder%3Agrp-1'
+    )
   })
 })

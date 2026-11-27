@@ -9,6 +9,7 @@ import { workspaceRouteParams } from '../../navigation/workspace-execution-host'
 export type FoldableStageTarget =
   | Readonly<{
       kind: 'session'
+      source?: 'bot' | 'project'
       hostId: string
       worktreeId: string
       name: string
@@ -19,10 +20,18 @@ export type FoldableStageTarget =
       kind: 'group'
       hostId: string
       groupId: string
+      worktreeId?: string
       name: string
     }>
 
-export type FoldableAuxMode = 'diff' | 'files' | 'review' | 'session'
+export type FoldableAuxMode = 'browser' | 'terminal' | 'files' | 'diff' | 'pick'
+
+export function foldableStageBadge(target: FoldableStageTarget): string {
+  if (target.kind === 'group') {
+    return '团队'
+  }
+  return target.source === 'bot' ? 'Bot' : '项目'
+}
 
 export function foldableStageKey(target: FoldableStageTarget): string {
   if (target.kind === 'group') {
@@ -55,11 +64,15 @@ export function buildFoldableStageRoute(target: FoldableStageTarget): BridgeInit
 }
 
 export function buildFoldableAuxRoute(
-  target: Extract<FoldableStageTarget, { kind: 'session' }>,
-  mode: FoldableAuxMode
+  target: FoldableStageTarget,
+  mode: 'terminal' | 'diff' | 'files' | 'review' | 'session'
 ): BridgeInitRoute | null {
+  const worktreeId = target.worktreeId
+  if (!worktreeId) {
+    return null
+  }
   const host = encodeURIComponent(target.hostId)
-  const wt = encodeURIComponent(target.worktreeId)
+  const wt = encodeURIComponent(worktreeId)
   const segment =
     mode === 'diff'
       ? 'source-control'
@@ -68,10 +81,11 @@ export function buildFoldableAuxRoute(
         : mode === 'review'
           ? 'review'
           : 'session'
+  const executionHost = target.kind === 'session' ? target.executionHost : undefined
   const params: Record<string, string> = {
     ...(target.name ? { name: target.name } : {}),
-    ...(target.executionHost && target.executionHost !== LOCAL_EXECUTION_HOST_ID
-      ? workspaceRouteParams(target.executionHost)
+    ...(executionHost && executionHost !== LOCAL_EXECUTION_HOST_ID
+      ? workspaceRouteParams(executionHost)
       : {})
   }
   return shellScreenRoute({

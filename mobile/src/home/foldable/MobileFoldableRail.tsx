@@ -1,10 +1,8 @@
 import {
-  ArrowDownToLine,
-  ArrowUpToLine,
   Bot,
+  Columns2,
   FolderGit2,
   Gauge,
-  LayoutGrid,
   PanelLeftClose,
   PanelLeftOpen,
   Settings,
@@ -31,20 +29,19 @@ const RAIL_LABELS: Record<FourZoneHomeTabId, string> = {
   usage: '使用情况'
 }
 
-/** 54dp left AppRail for unfolded Honor Magic V6, with thumb-zone bottom alignment and long-press reorder. */
+/** Simplified 54dp left AppRail for unfolded Honor Magic V6: 4 zones + 1-tap Split + List toggle + Settings. */
 export function MobileFoldableRail(props: {
   tabs: readonly FourZoneHomeTabId[]
   active: HomeTabId
-  thumbBottom: boolean
   midCollapsed: boolean
+  splitActive: boolean
   teamsBadge: number
   botsBadge: number
   projectsBadge: number
   onSelect: (tab: FourZoneHomeTabId) => void
   onLongPressTab: (tab: FourZoneHomeTabId) => void
-  onToggleThumbBottom: () => void
+  onToggleSplit: () => void
   onToggleMidCollapsed: () => void
-  onToggleClassicLayout: () => void
   onOpenSettings: () => void
 }) {
   useMobileColorScheme()
@@ -55,63 +52,60 @@ export function MobileFoldableRail(props: {
     usage: 0
   }
 
-  const zoneButtons = props.tabs.map((id) => {
-    const Icon = RAIL_ICONS[id]
-    const active = props.active === id
-    const badge = badges[id]
-    return (
-      <Pressable
-        key={id}
-        accessibilityRole="tab"
-        accessibilityLabel={RAIL_LABELS[id]}
-        accessibilityState={{ selected: active }}
-        onPress={() => props.onSelect(id)}
-        onLongPress={() => props.onLongPressTab(id)}
-        style={({ pressed }) => [
-          styles.railButton,
-          active && styles.railButtonActive,
-          pressed && styles.railButtonPressed
-        ]}
-      >
-        <Icon
-          size={21}
-          strokeWidth={active ? 2.2 : 1.8}
-          color={active ? colors.textPrimary : colors.textMuted}
-        />
-        {badge > 0 ? (
-          <View style={styles.railBadge} pointerEvents="none">
-            <Text style={styles.railBadgeText}>{badge > 99 ? '99+' : badge}</Text>
-          </View>
-        ) : null}
-      </Pressable>
-    )
-  })
-
-  const thumbAlignButton = (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={props.thumbBottom ? '切换图标靠上对齐' : '切换图标靠下对齐（护拇指）'}
-      onPress={props.onToggleThumbBottom}
-      style={({ pressed }) => [styles.railButton, pressed && styles.railButtonPressed]}
-    >
-      {props.thumbBottom ? (
-        <ArrowDownToLine size={17} color={colors.textMuted} />
-      ) : (
-        <ArrowUpToLine size={17} color={colors.textMuted} />
-      )}
-    </Pressable>
-  )
-
   return (
     <View style={styles.rail} accessibilityRole="tablist">
       <View style={styles.railGroup}>
-        {thumbAlignButton}
-        {!props.thumbBottom ? zoneButtons : null}
+        {props.tabs.map((id) => {
+          const Icon = RAIL_ICONS[id]
+          const active = props.active === id
+          const badge = badges[id]
+          return (
+            <Pressable
+              key={id}
+              accessibilityRole="tab"
+              accessibilityLabel={RAIL_LABELS[id]}
+              accessibilityState={{ selected: active }}
+              onPress={() => props.onSelect(id)}
+              onLongPress={() => props.onLongPressTab(id)}
+              style={({ pressed }) => [
+                styles.railButton,
+                active && styles.railButtonActive,
+                pressed && styles.railButtonPressed
+              ]}
+            >
+              <Icon
+                size={21}
+                strokeWidth={active ? 2.2 : 1.8}
+                color={active ? colors.textPrimary : colors.textMuted}
+              />
+              {badge > 0 ? (
+                <View style={styles.railBadge} pointerEvents="none">
+                  <Text style={styles.railBadgeText}>{badge > 99 ? '99+' : badge}</Text>
+                </View>
+              ) : null}
+            </Pressable>
+          )
+        })}
       </View>
 
       <View style={styles.railGroup}>
-        {props.thumbBottom ? zoneButtons : null}
-        <View style={styles.railDivider} />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={props.splitActive ? '退出左聊右看分屏' : '开启左聊右看分屏'}
+          accessibilityState={{ selected: props.splitActive }}
+          onPress={props.onToggleSplit}
+          style={({ pressed }) => [
+            styles.railButton,
+            props.splitActive && styles.railSplitActive,
+            pressed && styles.railButtonPressed
+          ]}
+        >
+          <Columns2
+            size={19}
+            color={props.splitActive ? colors.onAccent : colors.textSecondary}
+          />
+        </Pressable>
+
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={props.midCollapsed ? '展开列表栏' : '收起列表栏'}
@@ -119,19 +113,12 @@ export function MobileFoldableRail(props: {
           style={({ pressed }) => [styles.railButton, pressed && styles.railButtonPressed]}
         >
           {props.midCollapsed ? (
-            <PanelLeftOpen size={19} color={colors.textSecondary} />
+            <PanelLeftOpen size={18} color={colors.textMuted} />
           ) : (
-            <PanelLeftClose size={19} color={colors.textSecondary} />
+            <PanelLeftClose size={18} color={colors.textMuted} />
           )}
         </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="切换经典视图"
-          onPress={props.onToggleClassicLayout}
-          style={({ pressed }) => [styles.railButton, pressed && styles.railButtonPressed]}
-        >
-          <LayoutGrid size={18} color={colors.textMuted} />
-        </Pressable>
+
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="设置"

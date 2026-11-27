@@ -33,9 +33,10 @@ export const mobileFoldableStyles = themedStyleSheet(() => ({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle
   },
-  railButtonPressed: {
-    opacity: 0.7
+  railSplitActive: {
+    backgroundColor: colors.accentBlue
   },
+  railButtonPressed: { opacity: 0.7 },
   railBadge: {
     position: 'absolute',
     top: 3,
@@ -53,22 +54,9 @@ export const mobileFoldableStyles = themedStyleSheet(() => ({
     fontWeight: '700',
     color: '#000'
   },
-  railDivider: {
-    width: 24,
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-    marginVertical: 2
-  },
-  midPane: {
-    borderRightWidth: StyleSheet.hairlineWidth,
-    borderRightColor: colors.borderSubtle,
-    backgroundColor: colors.bgBase
-  },
-  stageRoot: {
-    flex: 1,
-    minWidth: 0,
-    backgroundColor: colors.bgBase
-  },
+  railDivider: { width: 24, height: StyleSheet.hairlineWidth, backgroundColor: colors.borderSubtle, marginVertical: 2 },
+  midPane: { borderRightWidth: StyleSheet.hairlineWidth, borderRightColor: colors.borderSubtle, backgroundColor: colors.bgBase },
+  stageRoot: { flex: 1, minWidth: 0, backgroundColor: colors.bgBase },
   stageBar: {
     height: 42,
     flexDirection: 'row',
@@ -80,24 +68,18 @@ export const mobileFoldableStyles = themedStyleSheet(() => ({
     backgroundColor: colors.bgPanel,
     gap: spacing.sm
   },
-  stageTitleWrap: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    minWidth: 0
+  stageTitleWrap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, minWidth: 0 },
+  stageKindBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: radii.pill,
+    backgroundColor: colors.bgBase,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderSubtle
   },
-  stageTitle: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.textPrimary
-  },
-  stageActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6
-  },
+  stageKindBadgeText: { fontSize: 10.5, fontWeight: '600', color: colors.textSecondary },
+  stageTitle: { flex: 1, fontSize: 14, fontWeight: '600', color: colors.textPrimary },
+  stageActions: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   stageChip: {
     height: 28,
     paddingHorizontal: 9,
@@ -109,18 +91,42 @@ export const mobileFoldableStyles = themedStyleSheet(() => ({
     alignItems: 'center',
     gap: 4
   },
-  stageChipActive: {
-    backgroundColor: colors.textPrimary,
-    borderColor: colors.textPrimary
+  stageChipText: { fontSize: 12, fontWeight: '600', color: colors.textSecondary },
+  splitCta: {
+    height: 28,
+    paddingHorizontal: 10,
+    borderRadius: radii.control,
+    borderWidth: 1,
+    borderColor: colors.accentBlue,
+    backgroundColor: colors.bgBase,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5
   },
-  stageChipText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.textSecondary
+  splitCtaActive: { backgroundColor: colors.accentBlue },
+  splitCtaText: { fontSize: 12, fontWeight: '600', color: colors.accentBlue },
+  splitCtaTextActive: { color: colors.onAccent },
+  secondaryHeader: {
+    height: 32,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderSubtle,
+    backgroundColor: colors.bgBase
   },
-  stageChipTextActive: {
-    color: colors.bgBase
+  secondaryTitle: { flex: 1, fontSize: 12, fontWeight: '600', color: colors.textPrimary },
+  secondarySwitchBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radii.pill,
+    backgroundColor: colors.bgPanel
   },
+  secondarySwitchText: { fontSize: 11, fontWeight: '500', color: colors.textSecondary },
   stageBody: {
     flex: 1,
     flexDirection: 'row',
@@ -193,16 +199,8 @@ export const mobileFoldableStyles = themedStyleSheet(() => ({
     lineHeight: 19
   },
   // Tabletop mode
-  tabletopRoot: {
-    flex: 1,
-    flexDirection: 'column',
-    backgroundColor: colors.bgBase
-  },
-  tabletopTop: {
-    minHeight: 0,
-    overflow: 'hidden',
-    backgroundColor: colors.bgBase
-  },
+  tabletopRoot: { flex: 1, flexDirection: 'column', backgroundColor: colors.bgBase },
+  tabletopTop: { minHeight: 0, overflow: 'hidden', backgroundColor: colors.bgBase },
   tabletopHinge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -220,20 +218,9 @@ export const mobileFoldableStyles = themedStyleSheet(() => ({
     paddingVertical: spacing.md,
     gap: spacing.sm
   },
-  tabletopHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between'
-  },
-  tabletopTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textSecondary
-  },
-  tabletopAgentStrip: {
-    flexDirection: 'row',
-    gap: spacing.xs
-  },
+  tabletopHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  tabletopTitle: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
+  tabletopAgentStrip: { flexDirection: 'row', gap: spacing.xs },
   tabletopAgentChip: {
     paddingHorizontal: 10,
     paddingVertical: 7,
@@ -246,19 +233,9 @@ export const mobileFoldableStyles = themedStyleSheet(() => ({
     gap: 6,
     maxWidth: 210
   },
-  tabletopAgentChipActive: {
-    borderColor: colors.accentBlue
-  },
-  tabletopAgentText: {
-    fontSize: 12.5,
-    fontWeight: '500',
-    color: colors.textPrimary
-  },
-  tabletopActionsRow: {
-    flex: 1,
-    flexDirection: 'row',
-    gap: spacing.sm
-  },
+  tabletopAgentChipActive: { borderColor: colors.accentBlue },
+  tabletopAgentText: { fontSize: 12.5, fontWeight: '500', color: colors.textPrimary },
+  tabletopActionsRow: { flex: 1, flexDirection: 'row', gap: spacing.sm },
   tabletopTile: {
     flex: 1,
     borderRadius: radii.surface,
@@ -270,30 +247,10 @@ export const mobileFoldableStyles = themedStyleSheet(() => ({
     padding: spacing.sm,
     gap: 5
   },
-  tabletopTilePrimary: {
-    backgroundColor: colors.accentBlue,
-    borderColor: colors.accentBlue
-  },
-  tabletopTileLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textPrimary
-  },
-  tabletopTileLabelPrimary: {
-    color: colors.onAccent
-  },
-  tabletopTileHint: {
-    fontSize: 11,
-    color: colors.textMuted,
-    textAlign: 'center'
-  },
-  tabletopTileHintPrimary: {
-    color: colors.onAccent,
-    opacity: 0.85
-  },
-  statusDotSmall: {
-    width: 7,
-    height: 7,
-    borderRadius: radii.pill
-  }
+  tabletopTilePrimary: { backgroundColor: colors.accentBlue, borderColor: colors.accentBlue },
+  tabletopTileLabel: { fontSize: 13, fontWeight: '600', color: colors.textPrimary },
+  tabletopTileLabelPrimary: { color: colors.onAccent },
+  tabletopTileHint: { fontSize: 11, color: colors.textMuted, textAlign: 'center' },
+  tabletopTileHintPrimary: { color: colors.onAccent, opacity: 0.85 },
+  statusDotSmall: { width: 7, height: 7, borderRadius: radii.pill }
 }))
