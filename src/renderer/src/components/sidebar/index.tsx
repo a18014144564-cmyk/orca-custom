@@ -275,6 +275,7 @@ function Sidebar({
         collapsible={botsShown}
         projectsCollapseTarget={setProjectsCollapseTarget}
         titleOverride={zoneTitleOverride}
+        hideWorkspaceOptions={!classicMode && (zoneMode === 'win' || zoneMode === 'mac')}
       />
       <SeveredTerminalDaemonBanner />
       <StalledTerminalDaemonBanner />

@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react'
-import { ChevronDown, ChevronRight, Plus, SlidersHorizontal, SquarePen } from 'lucide-react'
+import { ChevronDown, ChevronRight, Clock, FolderTree, Plus, SlidersHorizontal } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import {
@@ -27,14 +27,24 @@ import { groupCodexProjectsByHost, resolveCodexZoneHostMeta } from './sidebar-co
 import { buildCodexSidebarModel, type CodexProjectRow, type CodexRecentRow } from './sidebar-codex-model'
 import { CodexProjectRowItem, CodexRecentRowItem } from './SidebarPlatformCodexRows'
 
-const INITIAL_RECENT_LIMIT = 18
+const INITIAL_RECENT_LIMIT = 24
 const NO_CHILDREN: ReadonlyMap<string, readonly Worktree[]> = new Map()
 const EMPTY_IDENTITIES: ReadonlySet<string> = new Set()
+
+type ViewMode = 'tree' | 'recent'
 
 type SidebarPlatformCodexPaneProps = {
   hostIds: readonly ExecutionHostId[]
   emptyStateMessage?: string
   onWorktreeClick?: () => void
+}
+
+function projectMatchesActiveFilter(project: CodexProjectRow): boolean {
+  return (
+    project.isActive ||
+    project.statusTone !== 'idle' ||
+    project.threads.some((t) => t.statusTone !== 'idle' || t.isUnread || t.isActive)
+  )
 }
 
 export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodexPane({
@@ -59,10 +69,10 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
   const botGroups = useBotGroups(botsEnabled)
   const { allThreads } = useAllAgentPaneThreads()
 
-  const [expandedProjects, setExpandedProjects] = useState<ReadonlySet<string>>(() => new Set())
+  const [viewMode, setViewMode] = useState<ViewMode>('tree')
+  const [collapsedProjects, setCollapsedProjects] = useState<ReadonlySet<string>>(() => new Set())
   const [collapsedHosts, setCollapsedHosts] = useState<ReadonlySet<string>>(() => new Set())
-  const [recentCollapsed, setRecentCollapsed] = useState(false)
-  const [onlyActiveRecent, setOnlyActiveRecent] = useState(false)
+  const [onlyActive, setOnlyActive] = useState(false)
   const [showAllRecent, setShowAllRecent] = useState(false)
   const [selectedPaneKey, setSelectedPaneKey] = useState<string | null>(null)
 
@@ -110,7 +120,7 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
         defaultHostId,
         activeWorktreeId,
         selectedPaneKey,
-        onlyActiveRecent
+        onlyActiveRecent: onlyActive
       }),
     [
       repos,
@@ -128,13 +138,18 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
       defaultHostId,
       activeWorktreeId,
       selectedPaneKey,
-      onlyActiveRecent
+      onlyActive
     ]
   )
 
+  const visibleProjects = useMemo(
+    () => (onlyActive ? model.projects.filter(projectMatchesActiveFilter) : model.projects),
+    [model.projects, onlyActive]
+  )
+
   const projectHostSections = useMemo(
-    () => (hostMeta.multiHost ? groupCodexProjectsByHost(model.projects, hostMeta) : null),
-    [hostMeta, model.projects]
+    () => (hostMeta.multiHost ? groupCodexProjectsByHost(visibleProjects, hostMeta) : null),
+    [hostMeta, visibleProjects]
   )
 
   const toggleHostCollapsed = useCallback((hostId: string) => {
@@ -144,6 +159,18 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
         next.delete(hostId)
       } else {
         next.add(hostId)
+      }
+      return next
+    })
+  }, [])
+
+  const toggleProjectCollapsed = useCallback((projectKey: string) => {
+    setCollapsedProjects((prev) => {
+      const next = new Set(prev)
+      if (next.has(projectKey)) {
+        next.delete(projectKey)
+      } else {
+        next.add(projectKey)
       }
       return next
     })
@@ -162,18 +189,6 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
       }),
     [acknowledgeAgents, unacknowledgeAgents]
   )
-
-  const toggleProjectExpanded = useCallback((projectKey: string) => {
-    setExpandedProjects((prev) => {
-      const next = new Set(prev)
-      if (next.has(projectKey)) {
-        next.delete(projectKey)
-      } else {
-        next.add(projectKey)
-      }
-      return next
-    })
-  }, [])
 
   const handleActivateWorktree = useCallback(
     (worktreeId: string, hostId: ExecutionHostId) => {
@@ -199,7 +214,7 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
     [openModal]
   )
 
-  const handleSelectRecent = useCallback(
+  const handleSelectThread = useCallback(
     (item: CodexRecentRow) => {
       if (item.thread) {
         threadActions.selectThread(item.thread)
@@ -209,11 +224,6 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
       handleActivateWorktree(item.worktreeId, item.hostId)
     },
     [handleActivateWorktree, onWorktreeClick, threadActions]
-  )
-
-  const anyExpandable = useMemo(
-    () => model.projects.some((project) => project.worktrees.length > 1),
-    [model.projects]
   )
 
   const visibleRecentItems = showAllRecent
@@ -244,174 +254,156 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
       data-sidebar-codex-pane=""
       className="flex min-h-0 flex-1 flex-col overflow-y-auto px-2 pb-3 select-none"
     >
-      <div className="mt-1 flex items-center justify-between px-1.5 py-1">
-        <span className="text-[11px] font-medium tracking-wide text-muted-foreground">项目</span>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              aria-label="添加项目"
-              onClick={() => openModal('add-repo', {})}
-              className="flex size-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-worktree-sidebar-foreground/8 hover:text-foreground"
-            >
-              <Plus className="size-3.5" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="right" sideOffset={6}>
-            添加项目
-          </TooltipContent>
-        </Tooltip>
-      </div>
-
-      {projectHostSections ? (
-        <div className="flex flex-col gap-2">
-          {projectHostSections.map(({ host, projects }) => {
-            const hostCollapsed = collapsedHosts.has(host.hostId)
-            const dotClass =
-              host.health === 'local' || host.health === 'available'
-                ? 'bg-emerald-500'
-                : host.health === 'connecting' ||
-                    host.health === 'waking' ||
-                    host.health === 'provisioning'
-                  ? 'bg-amber-500 animate-pulse'
-                  : 'bg-muted-foreground/45'
-            return (
-              <div key={host.hostId} className="flex flex-col gap-0.5">
-                <button
-                  type="button"
-                  onClick={() => toggleHostCollapsed(host.hostId)}
-                  className="flex h-6 items-center gap-1.5 rounded px-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-worktree-sidebar-foreground/6 hover:text-foreground"
-                >
-                  {hostCollapsed ? (
-                    <ChevronRight className="size-3 shrink-0" />
-                  ) : (
-                    <ChevronDown className="size-3 shrink-0" />
-                  )}
-                  <span aria-hidden className={cn('size-1.5 shrink-0 rounded-full', dotClass)} />
-                  <span className="min-w-0 truncate">{host.label}</span>
-                  <span className="shrink-0 rounded bg-worktree-sidebar-foreground/6 px-1 py-0.5 text-[10px] leading-none text-muted-foreground/90">
-                    {host.tag}
-                  </span>
-                  <span className="ml-auto shrink-0 text-[10px] tabular-nums opacity-70">
-                    {projects.length}
-                  </span>
-                </button>
-                {!hostCollapsed ? (
-                  <div className="flex flex-col gap-0.5">
-                    {projects.map((project) => (
-                      <CodexProjectRowItem
-                        key={project.key}
-                        project={project}
-                        anyExpandable={anyExpandable}
-                        isExpanded={expandedProjects.has(project.key)}
-                        onToggleExpand={toggleProjectExpanded}
-                        onActivateWorktree={handleActivateWorktree}
-                        onCreateWorkspace={handleProjectCreate}
-                      />
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            )
-          })}
-        </div>
-      ) : (
-        <div className="flex flex-col gap-0.5">
-          {model.projects.map((project) => (
-            <CodexProjectRowItem
-              key={project.key}
-              project={project}
-              anyExpandable={anyExpandable}
-              isExpanded={expandedProjects.has(project.key)}
-              onToggleExpand={toggleProjectExpanded}
-              onActivateWorktree={handleActivateWorktree}
-              onCreateWorkspace={handleProjectCreate}
-            />
-          ))}
-        </div>
-      )}
-
-      <div className="mt-4 flex items-center justify-between px-1.5 py-1">
-        <button
-          type="button"
-          onClick={() => setRecentCollapsed((prev) => !prev)}
-          className="flex items-center gap-1 text-[11px] font-medium tracking-wide text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <span>最近</span>
-          {recentCollapsed ? <ChevronRight className="size-3" /> : <ChevronDown className="size-3" />}
-        </button>
+      <div className="mt-0.5 mb-1 flex items-center justify-between px-2 py-1">
+        <span className="text-[11px] font-medium text-muted-foreground/85">
+          {viewMode === 'tree' ? '线程' : '最近'}
+        </span>
 
         <div className="flex items-center gap-0.5">
           <Tooltip>
             <TooltipTrigger asChild>
               <button
                 type="button"
-                aria-label={onlyActiveRecent ? '显示全部最近对话' : '仅显示进行中的对话'}
-                aria-pressed={onlyActiveRecent}
-                onClick={() => setOnlyActiveRecent((prev) => !prev)}
-                className={cn(
-                  'flex size-5 items-center justify-center rounded transition-colors',
-                  onlyActiveRecent
-                    ? 'bg-worktree-sidebar-foreground/12 text-foreground'
-                    : 'text-muted-foreground hover:bg-worktree-sidebar-foreground/8 hover:text-foreground'
-                )}
+                aria-label={viewMode === 'tree' ? '切换为按最近时间排序' : '切换为按项目树形分组'}
+                onClick={() => setViewMode((prev) => (prev === 'tree' ? 'recent' : 'tree'))}
+                className="flex size-5 items-center justify-center rounded text-muted-foreground/80 transition-colors hover:bg-worktree-sidebar-foreground/8 hover:text-foreground"
               >
-                <SlidersHorizontal className="size-3" />
+                {viewMode === 'tree' ? (
+                  <Clock className="size-3" />
+                ) : (
+                  <FolderTree className="size-3" />
+                )}
               </button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
-              {onlyActiveRecent ? '已筛选：仅进行中（点击显示全部）' : '筛选进行中的对话'}
+              {viewMode === 'tree' ? '按最近时间查看' : '按项目分组查看'}
             </TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
               <button
                 type="button"
-                aria-label="新建对话"
-                onClick={() => openModal('new-workspace-composer', { telemetrySource: 'sidebar' })}
-                className="flex size-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-worktree-sidebar-foreground/8 hover:text-foreground"
+                aria-label={onlyActive ? '显示全部' : '仅显示进行中'}
+                aria-pressed={onlyActive}
+                onClick={() => setOnlyActive((prev) => !prev)}
+                className={cn(
+                  'flex size-5 items-center justify-center rounded transition-colors',
+                  onlyActive
+                    ? 'bg-worktree-sidebar-foreground/12 text-foreground'
+                    : 'text-muted-foreground/80 hover:bg-worktree-sidebar-foreground/8 hover:text-foreground'
+                )}
               >
-                <SquarePen className="size-3" />
+                <SlidersHorizontal className="size-3" />
               </button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
-              新建对话 / 工作区
+              {onlyActive ? '已筛选：仅进行中（点击显示全部）' : '仅显示进行中的对话'}
             </TooltipContent>
           </Tooltip>
         </div>
       </div>
 
-      {!recentCollapsed ? (
-        visibleRecentItems.length === 0 ? (
-          <p className="px-2 py-2 text-xs text-muted-foreground/80">
-            {onlyActiveRecent ? '当前没有进行中的对话' : '暂无最近对话'}
-          </p>
-        ) : (
-          <div className="flex flex-col gap-0.5">
-            {visibleRecentItems.map((item) => {
-              const hostInfo = hostMeta.multiHost ? hostMeta.hostInfoById.get(item.hostId) : undefined
-              const hostTag = hostInfo ? (hostInfo.isLocal ? '本地' : hostInfo.label) : undefined
+      {viewMode === 'tree' ? (
+        visibleProjects.length === 0 ? (
+          <p className="px-2 py-4 text-xs text-muted-foreground/75">当前没有进行中的项目或对话</p>
+        ) : projectHostSections ? (
+          <div className="flex flex-col gap-2.5">
+            {projectHostSections.map(({ host, projects }) => {
+              const hostCollapsed = collapsedHosts.has(host.hostId)
+              const dotClass =
+                host.health === 'local' || host.health === 'available'
+                  ? 'bg-emerald-500'
+                  : host.health === 'connecting' ||
+                      host.health === 'waking' ||
+                      host.health === 'provisioning'
+                    ? 'bg-amber-500 animate-pulse'
+                    : 'bg-muted-foreground/45'
               return (
-                <CodexRecentRowItem
-                  key={item.key}
-                  item={item}
-                  hostTag={hostTag}
-                  onSelect={handleSelectRecent}
-                />
+                <div key={host.hostId} className="flex flex-col gap-0.5">
+                  <button
+                    type="button"
+                    onClick={() => toggleHostCollapsed(host.hostId)}
+                    className="flex h-6 items-center gap-1.5 rounded px-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-worktree-sidebar-foreground/6 hover:text-foreground"
+                  >
+                    {hostCollapsed ? (
+                      <ChevronRight className="size-3 shrink-0 opacity-70" />
+                    ) : (
+                      <ChevronDown className="size-3 shrink-0 opacity-70" />
+                    )}
+                    <span aria-hidden className={cn('size-1.5 shrink-0 rounded-full', dotClass)} />
+                    <span className="min-w-0 truncate">{host.label}</span>
+                    <span className="shrink-0 rounded bg-worktree-sidebar-foreground/6 px-1 py-0.5 text-[10px] leading-none text-muted-foreground/85">
+                      {host.tag}
+                    </span>
+                    <span className="ml-auto shrink-0 text-[10px] tabular-nums opacity-60">
+                      {projects.length}
+                    </span>
+                  </button>
+                  {!hostCollapsed ? (
+                    <div className="flex flex-col gap-0.5">
+                      {projects.map((project) => (
+                        <CodexProjectRowItem
+                          key={project.key}
+                          project={project}
+                          isExpanded={!collapsedProjects.has(project.key)}
+                          onlyActive={onlyActive}
+                          onToggleExpand={toggleProjectCollapsed}
+                          onActivateWorktree={handleActivateWorktree}
+                          onSelectThread={handleSelectThread}
+                          onCreateWorkspace={handleProjectCreate}
+                        />
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
               )
             })}
-            {hiddenRecentCount > 0 ? (
-              <button
-                type="button"
-                onClick={() => setShowAllRecent(true)}
-                className="mt-0.5 rounded-md px-2 py-1 text-left text-[11px] text-muted-foreground transition-colors hover:bg-worktree-sidebar-foreground/6 hover:text-foreground"
-              >
-                展开其余 {hiddenRecentCount} 条…
-              </button>
-            ) : null}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-0.5">
+            {visibleProjects.map((project) => (
+              <CodexProjectRowItem
+                key={project.key}
+                project={project}
+                isExpanded={!collapsedProjects.has(project.key)}
+                onlyActive={onlyActive}
+                onToggleExpand={toggleProjectCollapsed}
+                onActivateWorktree={handleActivateWorktree}
+                onSelectThread={handleSelectThread}
+                onCreateWorkspace={handleProjectCreate}
+              />
+            ))}
           </div>
         )
-      ) : null}
+      ) : visibleRecentItems.length === 0 ? (
+        <p className="px-2 py-4 text-xs text-muted-foreground/75">
+          {onlyActive ? '当前没有进行中的对话' : '暂无最近对话'}
+        </p>
+      ) : (
+        <div className="flex flex-col gap-0.5">
+          {visibleRecentItems.map((item) => {
+            const hostInfo = hostMeta.multiHost ? hostMeta.hostInfoById.get(item.hostId) : undefined
+            const hostTag = hostInfo ? (hostInfo.isLocal ? '本地' : hostInfo.label) : undefined
+            return (
+              <CodexRecentRowItem
+                key={item.key}
+                item={item}
+                hostTag={hostTag}
+                onSelect={handleSelectThread}
+              />
+            )
+          })}
+          {hiddenRecentCount > 0 ? (
+            <button
+              type="button"
+              onClick={() => setShowAllRecent(true)}
+              className="mt-0.5 rounded-md px-2 py-1 text-left text-[11px] text-muted-foreground transition-colors hover:bg-worktree-sidebar-foreground/6 hover:text-foreground"
+            >
+              展开其余 {hiddenRecentCount} 条…
+            </button>
+          ) : null}
+        </div>
+      )}
     </div>
   )
 })

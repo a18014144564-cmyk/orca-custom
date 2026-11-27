@@ -19,6 +19,7 @@ type SidebarHeaderProps = {
   collapsible?: boolean
   projectsCollapseTarget?: React.Ref<HTMLDivElement>
   titleOverride?: string
+  hideWorkspaceOptions?: boolean
 }
 
 const SidebarHeader = React.memo(function SidebarHeader({
@@ -27,7 +28,8 @@ const SidebarHeader = React.memo(function SidebarHeader({
   activityOptionsTarget,
   collapsible = false,
   projectsCollapseTarget,
-  titleOverride
+  titleOverride,
+  hideWorkspaceOptions = false
 }: SidebarHeaderProps) {
   const t = useTranslate()
   // Subscribe this memoized header to locale changes before using translate().
@@ -171,6 +173,7 @@ const SidebarHeader = React.memo(function SidebarHeader({
           <SidebarHeaderActions
             onWorkspaceBoardMenuOpenChange={onWorkspaceBoardMenuOpenChange}
             agentsViewActive={agentsViewActive}
+            hideWorkspaceOptions={hideWorkspaceOptions}
             activityOptionsTarget={activityOptionsTarget}
           />
         </>

@@ -1,7 +1,7 @@
 import {
-  ChevronDown,
-  ChevronRight,
+  Clock,
   FolderGit2,
+  FolderTree,
   Laptop,
   LayoutGrid,
   Monitor,
@@ -21,7 +21,11 @@ import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { Worktree } from '../../worktree/workspace-list/workspace-list-types'
 import { homeListStyles } from '../home-list-styles'
 import type { MobileHomeData } from '../use-mobile-home-data'
-import { buildMobileCodexProjectsModel, type MobileCodexRecentRow } from './mobile-codex-projects'
+import {
+  buildMobileCodexProjectsModel,
+  type MobileCodexProjectRow,
+  type MobileCodexRecentRow
+} from './mobile-codex-projects'
 import {
   collectBotHomeWorktreeIds,
   resolvePlatformConnectionHealth,
@@ -34,9 +38,19 @@ import { MobileHomeTabEmpty } from './MobileHomeTabEmpty'
 import { MobileHomeTabHeader, MobileHomeTabHeaderButton } from './MobileHomeTabHeader'
 
 const SWIPE_THRESHOLD_PX = 42
-const INITIAL_RECENT_LIMIT = 16
+const INITIAL_RECENT_LIMIT = 24
 
-/** 4-zone merged Projects tab: swipe/tap between Win and Mac in Codex x Orca hybrid layout. */
+type ViewMode = 'tree' | 'recent'
+
+function projectHasLiveActivity(project: MobileCodexProjectRow): boolean {
+  return (
+    project.statusTone !== 'idle' ||
+    project.unread ||
+    project.threads.some((t) => t.statusTone !== 'idle' || t.unread)
+  )
+}
+
+/** 4-zone merged Projects tab: swipe/tap between Win and Mac in pure Codex single-tree layout. */
 export function MobileHomeProjectsTab(props: {
   platform: MobileProjectsPlatform
   onSelectPlatform: (platform: MobileProjectsPlatform) => void
@@ -57,9 +71,9 @@ export function MobileHomeProjectsTab(props: {
   const { isWideLayout, contentMaxWidth } = useResponsiveLayout()
   const { data, platform, winHosts, macHosts, onSelectPlatform } = props
 
-  const [expandedProjects, setExpandedProjects] = useState<ReadonlySet<string>>(() => new Set())
-  const [recentCollapsed, setRecentCollapsed] = useState(false)
-  const [onlyActiveRecent, setOnlyActiveRecent] = useState(false)
+  const [viewMode, setViewMode] = useState<ViewMode>('tree')
+  const [collapsedProjects, setCollapsedProjects] = useState<ReadonlySet<string>>(() => new Set())
+  const [onlyActive, setOnlyActive] = useState(false)
   const [showAllRecent, setShowAllRecent] = useState(false)
 
   const botHomeWorktreeIds = useMemo(
@@ -70,47 +84,38 @@ export function MobileHomeProjectsTab(props: {
   const winModel = useMemo(
     () =>
       buildMobileCodexProjectsModel({
-        hosts: winHosts,
-        worktreeInfo: data.worktreeInfo,
-        hostStates: data.hostStates,
-        botHomeWorktreeIds,
-        onlyActiveRecent
+        hosts: winHosts, worktreeInfo: data.worktreeInfo, hostStates: data.hostStates,
+        botHomeWorktreeIds, onlyActiveRecent: onlyActive
       }),
-    [botHomeWorktreeIds, data.hostStates, data.worktreeInfo, onlyActiveRecent, winHosts]
+    [botHomeWorktreeIds, data.hostStates, data.worktreeInfo, onlyActive, winHosts]
   )
   const macModel = useMemo(
     () =>
       buildMobileCodexProjectsModel({
-        hosts: macHosts,
-        worktreeInfo: data.worktreeInfo,
-        hostStates: data.hostStates,
-        botHomeWorktreeIds,
-        onlyActiveRecent
+        hosts: macHosts, worktreeInfo: data.worktreeInfo, hostStates: data.hostStates,
+        botHomeWorktreeIds, onlyActiveRecent: onlyActive
       }),
-    [botHomeWorktreeIds, data.hostStates, data.worktreeInfo, onlyActiveRecent, macHosts]
+    [botHomeWorktreeIds, data.hostStates, data.worktreeInfo, onlyActive, macHosts]
   )
-
-  const winHealth = useMemo(
-    () => resolvePlatformConnectionHealth(winHosts, data.hostStates),
-    [data.hostStates, winHosts]
-  )
-  const macHealth = useMemo(
-    () => resolvePlatformConnectionHealth(macHosts, data.hostStates),
-    [data.hostStates, macHosts]
-  )
+  const winHealth = useMemo(() => resolvePlatformConnectionHealth(winHosts, data.hostStates), [data.hostStates, winHosts])
+  const macHealth = useMemo(() => resolvePlatformConnectionHealth(macHosts, data.hostStates), [data.hostStates, macHosts])
 
   const isWin = platform === 'win'
   const currentHosts = isWin ? winHosts : macHosts
   const currentModel = isWin ? winModel : macModel
   const multiHost = currentHosts.length > 1
   const currentConnecting = currentHosts.some((host) => data.hostStates[host.id] === 'connecting')
-  const anyExpandable = useMemo(
-    () => currentModel.projects.some((project) => project.items.length > 1),
-    [currentModel.projects]
+
+  const visibleProjects = useMemo(
+    () =>
+      onlyActive
+        ? currentModel.projects.filter(projectHasLiveActivity)
+        : currentModel.projects,
+    [currentModel.projects, onlyActive]
   )
 
-  const toggleProjectExpanded = useCallback((projectKey: string) => {
-    setExpandedProjects((prev) => {
+  const toggleProjectCollapsed = useCallback((projectKey: string) => {
+    setCollapsedProjects((prev) => {
       const next = new Set(prev)
       if (next.has(projectKey)) {
         next.delete(projectKey)
@@ -280,56 +285,60 @@ export function MobileHomeProjectsTab(props: {
         ]}
       >
         <View style={[styles.sectionHeaderRow, styles.sectionHeaderFirst]}>
-          <Text style={styles.sectionHeaderTitle}>项目</Text>
-        </View>
-        <View style={homeListStyles.group}>
-          {currentModel.projects.map((project, index) => (
-            <MobileCodexProjectRowView
-              key={project.key}
-              project={project}
-              multiHost={multiHost}
-              anyExpandable={anyExpandable}
-              expanded={expandedProjects.has(project.key)}
-              separated={index > 0}
-              onToggleExpand={() => toggleProjectExpanded(project.key)}
-              onOpenWorktree={props.onOpenWorktree}
-            />
-          ))}
+          <Text style={styles.sectionHeaderTitle}>{viewMode === 'tree' ? '线程' : '最近'}</Text>
+          <View style={styles.headerActions}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={viewMode === 'tree' ? '切换为按最近时间排序' : '切换为按项目分组'}
+              onPress={() => setViewMode((prev) => (prev === 'tree' ? 'recent' : 'tree'))}
+              style={styles.filterButton}
+            >
+              {viewMode === 'tree' ? (
+                <Clock size={14} color={colors.textMuted} />
+              ) : (
+                <FolderTree size={14} color={colors.textMuted} />
+              )}
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={onlyActive ? '显示全部' : '仅显示进行中'}
+              accessibilityState={{ selected: onlyActive }}
+              onPress={() => setOnlyActive((prev) => !prev)}
+              style={[styles.filterButton, onlyActive && styles.filterButtonActive]}
+            >
+              <SlidersHorizontal
+                size={14}
+                color={onlyActive ? colors.textPrimary : colors.textMuted}
+              />
+            </Pressable>
+          </View>
         </View>
 
-        <View style={styles.sectionHeaderRow}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={recentCollapsed ? '展开最近对话' : '收起最近对话'}
-            onPress={() => setRecentCollapsed((prev) => !prev)}
-            style={styles.sectionHeaderToggle}
-          >
-            <Text style={styles.sectionHeaderTitle}>最近</Text>
-            {recentCollapsed ? (
-              <ChevronRight size={13} color={colors.textMuted} />
+        {viewMode === 'tree' ? (
+          <View style={homeListStyles.group}>
+            {visibleProjects.length === 0 ? (
+              <Text style={styles.recentEmptyText}>当前没有进行中的项目或对话</Text>
             ) : (
-              <ChevronDown size={13} color={colors.textMuted} />
+              visibleProjects.map((project, index) => (
+                <MobileCodexProjectRowView
+                  key={project.key}
+                  project={project}
+                  multiHost={multiHost}
+                  expanded={!collapsedProjects.has(project.key)}
+                  onlyActive={onlyActive}
+                  separated={index > 0}
+                  onToggleExpand={() => toggleProjectCollapsed(project.key)}
+                  onOpenWorktree={props.onOpenWorktree}
+                  onSelectThread={handlePressRecent}
+                />
+              ))
             )}
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={onlyActiveRecent ? '显示全部最近对话' : '仅显示进行中的对话'}
-            accessibilityState={{ selected: onlyActiveRecent }}
-            onPress={() => setOnlyActiveRecent((prev) => !prev)}
-            style={[styles.filterButton, onlyActiveRecent && styles.filterButtonActive]}
-          >
-            <SlidersHorizontal
-              size={14}
-              color={onlyActiveRecent ? colors.textPrimary : colors.textMuted}
-            />
-          </Pressable>
-        </View>
-
-        {!recentCollapsed ? (
+          </View>
+        ) : (
           <View style={homeListStyles.group}>
             {visibleRecent.length === 0 ? (
               <Text style={styles.recentEmptyText}>
-                {onlyActiveRecent ? '当前没有进行中的单聊' : '暂无最近单聊'}
+                {onlyActive ? '当前没有进行中的单聊' : '暂无最近单聊'}
               </Text>
             ) : (
               <>
@@ -356,7 +365,7 @@ export function MobileHomeProjectsTab(props: {
               </>
             )}
           </View>
-        ) : null}
+        )}
       </ScrollView>
     )
 

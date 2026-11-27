@@ -93,10 +93,12 @@ function NewWorkspaceButton({
 export function SidebarHeaderActions({
   onWorkspaceBoardMenuOpenChange,
   agentsViewActive = false,
+  hideWorkspaceOptions = false,
   activityOptionsTarget
 }: {
   onWorkspaceBoardMenuOpenChange: (open: boolean) => void
   agentsViewActive?: boolean
+  hideWorkspaceOptions?: boolean
   activityOptionsTarget?: React.Ref<HTMLDivElement>
 }): React.JSX.Element {
   const openMenusRef = useRef({ options: false, addProject: false })
@@ -112,14 +114,16 @@ export function SidebarHeaderActions({
 
   return (
     <div className="flex shrink-0 items-center gap-1" data-sidebar-header-actions="">
-      <div ref={activityOptionsTarget} className="flex size-6 shrink-0 items-center">
-        {agentsViewActive ? null : (
-          <SidebarWorkspaceOptionsMenu
-            preserveWorkspaceBoardOpen
-            onMenuOpenChange={(open) => updateMenuOpen('options', open)}
-          />
-        )}
-      </div>
+      {!hideWorkspaceOptions || agentsViewActive ? (
+        <div ref={activityOptionsTarget} className="flex size-6 shrink-0 items-center">
+          {agentsViewActive ? null : (
+            <SidebarWorkspaceOptionsMenu
+              preserveWorkspaceBoardOpen
+              onMenuOpenChange={(open) => updateMenuOpen('options', open)}
+            />
+          )}
+        </div>
+      ) : null}
       <AddProjectButton
         preserveWorkspaceBoardOpen
         onMenuOpenChange={(open) => updateMenuOpen('addProject', open)}

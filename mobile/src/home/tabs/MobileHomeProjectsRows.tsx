@@ -1,6 +1,6 @@
-import { ChevronDown, ChevronRight, GitBranch } from 'lucide-react-native'
+import { Folder, FolderOpen, GitBranch } from 'lucide-react-native'
+import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { MobileRepoIcon } from '../../components/icons/MobileRepoIcon'
 import type { HostCatalogEntry } from '../../host-catalog/host-profile'
 import { colors } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
@@ -13,6 +13,8 @@ import {
   type MobileCodexTone
 } from './mobile-codex-projects'
 import { mobileHomeProjectsStyles as styles } from './mobile-home-projects-styles'
+
+const INITIAL_PROJECT_THREADS = 5
 
 function cleanBranchName(branch: string | null | undefined): string | null {
   if (!branch) {
@@ -32,84 +34,109 @@ function toneColor(tone: MobileCodexTone): string | null {
   return null
 }
 
-function CornerStatusDot({ tone }: { tone: MobileCodexTone }) {
-  useMobileColorScheme()
-  const dotColor = toneColor(tone)
-  if (!dotColor) {
-    return null
-  }
-  return <View style={[styles.cornerDot, { backgroundColor: dotColor }]} pointerEvents="none" />
+function isLiveThread(item: MobileCodexRecentRow): boolean {
+  return item.statusTone === 'working' || item.statusTone === 'attention' || item.unread
 }
 
 export function MobileCodexProjectRowView(props: {
   project: MobileCodexProjectRow
   multiHost: boolean
-  anyExpandable: boolean
   expanded: boolean
+  onlyActive: boolean
   separated: boolean
   onToggleExpand: () => void
   onOpenWorktree: (host: HostCatalogEntry, row: Worktree) => void
+  onSelectThread: (item: MobileCodexRecentRow) => void
 }) {
   useMobileColorScheme()
+  const [showAllThreads, setShowAllThreads] = useState(false)
   const { project } = props
-  const isMulti = project.items.length > 1
   const label = props.multiHost ? `${project.repo} · ${project.host.name}` : project.repo
+
+  const filteredThreads = props.onlyActive
+    ? project.threads.filter(isLiveThread)
+    : project.threads
+  const coveredWorktreeIds = new Set(filteredThreads.map((item) => item.worktreeId))
+  const extraItems =
+    project.items.length > 1
+      ? project.items.filter(
+          (item) =>
+            !coveredWorktreeIds.has(item.row.worktreeId) &&
+            (!props.onlyActive || item.working || item.active || item.unread)
+        )
+      : []
+
+  const hasChildren = filteredThreads.length > 0 || extraItems.length > 0
+  const childrenVisible = hasChildren && props.expanded
+  const visibleThreads = showAllThreads
+    ? filteredThreads
+    : filteredThreads.slice(0, INITIAL_PROJECT_THREADS)
+  const hiddenThreadCount = filteredThreads.length - visibleThreads.length
+  const collapsedDot = !childrenVisible ? toneColor(project.statusTone) : null
 
   return (
     <View>
       {props.separated ? <View style={homeListStyles.separator} /> : null}
-      <View style={styles.codexProjectRow}>
-        {props.anyExpandable ? (
-          isMulti ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={props.expanded ? '收起分支' : '展开分支'}
-              hitSlop={8}
-              onPress={props.onToggleExpand}
-              style={styles.expandButton}
-            >
-              {props.expanded ? (
-                <ChevronDown size={14} color={colors.textMuted} />
-              ) : (
-                <ChevronRight size={14} color={colors.textMuted} />
-              )}
-            </Pressable>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        onPress={() => {
+          if (hasChildren) {
+            props.onToggleExpand()
+          } else {
+            props.onOpenWorktree(project.host, project.primaryItem.row)
+          }
+        }}
+        onLongPress={() => props.onOpenWorktree(project.host, project.primaryItem.row)}
+        style={({ pressed }) => [styles.codexProjectRow, pressed && styles.rowPressed]}
+      >
+        <View style={styles.folderIconWrap}>
+          {childrenVisible ? (
+            <FolderOpen size={16} color={colors.textMuted} />
           ) : (
-            <View style={styles.expandSpacer} />
-          )
-        ) : null}
+            <Folder size={16} color={colors.textMuted} />
+          )}
+        </View>
+        <Text style={styles.codexProjectTitle} numberOfLines={1}>
+          {label}
+        </Text>
+        <View style={styles.codexTrailing}>
+          {collapsedDot ? (
+            <View style={[styles.treeDot, { backgroundColor: collapsedDot }]} />
+          ) : null}
+          {!childrenVisible && project.unread ? <View style={styles.unreadDot} /> : null}
+        </View>
+      </Pressable>
 
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={label}
-          onPress={() => props.onOpenWorktree(project.host, project.primaryItem.row)}
-          style={({ pressed }) => [styles.codexProjectMain, pressed && styles.rowPressed]}
-        >
-          <View style={styles.markWrap}>
-            <MobileRepoIcon
-              repoIcon={project.markIcon}
-              size={24}
-              color={project.markColor}
-            />
-            <CornerStatusDot tone={project.statusTone} />
-          </View>
-          <Text style={styles.codexProjectTitle} numberOfLines={1}>
-            {label}
-          </Text>
-          <View style={styles.codexTrailing}>
-            {project.openCount > 0 ? (
-              <View style={styles.tabCountPill}>
-                <Text style={styles.tabCountText}>{project.openCount}</Text>
-              </View>
-            ) : null}
-            {project.unread ? <View style={styles.unreadDot} /> : null}
-          </View>
-        </Pressable>
-      </View>
+      {childrenVisible ? (
+        <View style={styles.treeThreadList}>
+          {visibleThreads.map((thread) => {
+            const relTime = formatMobileRelativeTime(thread.timestamp)
+            const dot = toneColor(thread.statusTone)
+            return (
+              <Pressable
+                key={thread.key}
+                accessibilityRole="button"
+                accessibilityLabel={thread.title}
+                onPress={() => props.onSelectThread(thread)}
+                style={({ pressed }) => [styles.treeThreadRow, pressed && styles.rowPressed]}
+              >
+                <View style={styles.treeDotSlot}>
+                  {dot ? <View style={[styles.treeDot, { backgroundColor: dot }]} /> : null}
+                </View>
+                <Text style={styles.treeThreadTitle} numberOfLines={1}>
+                  {thread.title}
+                </Text>
+                {relTime ? (
+                  <Text style={styles.treeThreadTime} numberOfLines={1}>
+                    {relTime}
+                  </Text>
+                ) : null}
+              </Pressable>
+            )
+          })}
 
-      {isMulti && props.expanded ? (
-        <View style={styles.branchList}>
-          {project.items.map((item) => {
+          {extraItems.map((item) => {
             const branch = cleanBranchName(item.row.branch)
             const name = item.row.displayName?.trim() || branch || project.repo
             const dot = item.working
@@ -133,6 +160,16 @@ export function MobileCodexProjectRowView(props: {
               </Pressable>
             )
           })}
+
+          {hiddenThreadCount > 0 ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setShowAllThreads(true)}
+              style={({ pressed }) => [styles.treeShowMoreRow, pressed && styles.rowPressed]}
+            >
+              <Text style={styles.showMoreText}>展开其余 {hiddenThreadCount} 条…</Text>
+            </Pressable>
+          ) : null}
         </View>
       ) : null}
     </View>
@@ -147,6 +184,7 @@ export function MobileCodexRecentRowView(props: {
   useMobileColorScheme()
   const { item } = props
   const relTime = formatMobileRelativeTime(item.timestamp)
+  const dot = toneColor(item.statusTone)
 
   return (
     <View>
@@ -157,13 +195,17 @@ export function MobileCodexRecentRowView(props: {
         onPress={props.onPress}
         style={({ pressed }) => [styles.codexRecentRow, pressed && styles.rowPressed]}
       >
-        <View style={styles.markWrapSmall}>
-          <MobileRepoIcon repoIcon={item.markIcon} size={20} color={item.markColor} />
-          <CornerStatusDot tone={item.statusTone} />
+        <View style={styles.treeDotSlot}>
+          {dot ? <View style={[styles.treeDot, { backgroundColor: dot }]} /> : null}
         </View>
         <Text style={styles.codexRecentTitle} numberOfLines={1}>
           {item.title}
         </Text>
+        {item.title !== item.projectName ? (
+          <Text style={styles.treeProjectMeta} numberOfLines={1}>
+            {item.projectName}
+          </Text>
+        ) : null}
         {relTime ? (
           <Text style={styles.codexRecentTime} numberOfLines={1}>
             {relTime}

@@ -31,6 +31,7 @@ export type MobileCodexProjectRow = Readonly<{
   markColor: string
   primaryItem: PlatformProjectItem
   items: readonly PlatformProjectItem[]
+  threads: readonly MobileCodexRecentRow[]
   openCount: number
   statusTone: MobileCodexTone
   unread: boolean
@@ -193,6 +194,7 @@ export function buildMobileCodexProjectsModel(args: {
       markColor: mark.color,
       primaryItem: group.items[0]!,
       items: group.items,
+      threads: [],
       openCount,
       statusTone,
       unread,
@@ -202,6 +204,7 @@ export function buildMobileCodexProjectsModel(args: {
 
   const allRecentRows: MobileCodexRecentRow[] = []
   const worktreeKeysWithAgent = new Set<string>()
+  const threadsByWorktreeKey = new Map<string, MobileCodexRecentRow[]>()
   const safeWorktreeInfo: Record<string, HostWorktreeInfo> = {}
   for (const host of args.hosts) {
     const info = args.worktreeInfo[host.id]
@@ -232,7 +235,7 @@ export function buildMobileCodexProjectsModel(args: {
         color: DEFAULT_REPO_BADGE_COLOR,
         repo: agentRow.entry.repo || agentRow.entry.workspaceName
       }
-      allRecentRows.push({
+      const recentRow: MobileCodexRecentRow = {
         key: `agent:${agentRow.key}`,
         kind: 'agent',
         title: agentRow.title,
@@ -246,9 +249,19 @@ export function buildMobileCodexProjectsModel(args: {
         statusTone: agentTone(agentRow),
         unread: agentRow.unread === true,
         timestamp: agentRow.timeAt
-      })
+      }
+      allRecentRows.push(recentRow)
+      const list = threadsByWorktreeKey.get(wtKey)
+      if (list) { list.push(recentRow) } else { threadsByWorktreeKey.set(wtKey, [recentRow]) }
     }
   }
+
+  const projectsWithThreads: MobileCodexProjectRow[] = projects.map((project) => {
+    const projectThreads = project.items
+      .flatMap((item) => threadsByWorktreeKey.get(item.key) ?? [])
+      .sort((a, b) => b.timestamp - a.timestamp || a.title.localeCompare(b.title))
+    return { ...project, threads: projectThreads }
+  })
 
   for (const project of projects) {
     for (const item of project.items) {
@@ -284,5 +297,5 @@ export function buildMobileCodexProjectsModel(args: {
     ? allRecentRows.filter((row) => row.statusTone === 'working' || row.statusTone === 'attention' || row.unread)
     : allRecentRows
 
-  return { projects, recentItems, totalRecentCount: allRecentRows.length }
+  return { projects: projectsWithThreads, recentItems, totalRecentCount: allRecentRows.length }
 }

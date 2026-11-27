@@ -98,23 +98,6 @@ export const mobileHomeProjectsStyles = themedStyleSheet(() => ({
     fontSize: 14,
     fontWeight: '600'
   },
-  rowStatusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: radii.pill
-  },
-  rowStatusDotIdle: {
-    opacity: 0.45
-  },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 1
-  },
-  branchIcon: {
-    marginTop: 1
-  },
   unreadDot: {
     width: 7,
     height: 7,
@@ -143,6 +126,11 @@ export const mobileHomeProjectsStyles = themedStyleSheet(() => ({
     color: colors.textMuted,
     letterSpacing: 0.2
   },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2
+  },
   filterButton: {
     width: 28,
     height: 28,
@@ -156,54 +144,18 @@ export const mobileHomeProjectsStyles = themedStyleSheet(() => ({
   codexProjectRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 44,
-    paddingLeft: spacing.sm,
-    paddingRight: spacing.md
-  },
-  expandButton: {
-    width: 22,
-    height: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 2
-  },
-  expandSpacer: {
-    width: 24
-  },
-  codexProjectMain: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
+    minHeight: 42,
     gap: 10,
+    paddingHorizontal: spacing.md,
     paddingVertical: 10
   },
-  rowPressed: {
-    opacity: 0.65
-  },
-  markWrap: {
-    position: 'relative',
-    width: 24,
-    height: 24,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  markWrapSmall: {
-    position: 'relative',
+  folderIconWrap: {
     width: 20,
     height: 20,
     alignItems: 'center',
     justifyContent: 'center'
   },
-  cornerDot: {
-    position: 'absolute',
-    right: -2,
-    bottom: -2,
-    width: 8,
-    height: 8,
-    borderRadius: radii.pill,
-    borderWidth: 1.5,
-    borderColor: colors.bgPanel
-  },
+  rowPressed: { opacity: 0.65 },
   codexProjectTitle: {
     flex: 1,
     fontSize: 15,
@@ -214,21 +166,6 @@ export const mobileHomeProjectsStyles = themedStyleSheet(() => ({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6
-  },
-  tabCountPill: {
-    minWidth: 20,
-    height: 18,
-    paddingHorizontal: 6,
-    borderRadius: radii.pill,
-    backgroundColor: colors.bgRaised,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  tabCountText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.textMuted,
-    fontVariant: ['tabular-nums']
   },
   branchList: {
     marginLeft: 38,
@@ -256,11 +193,54 @@ export const mobileHomeProjectsStyles = themedStyleSheet(() => ({
     height: 6,
     borderRadius: radii.pill
   },
+  treeThreadList: {
+    paddingLeft: 30,
+    paddingRight: spacing.md,
+    paddingBottom: spacing.xs + 2,
+    gap: 2
+  },
+  treeThreadRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    minHeight: 36,
+    paddingVertical: 6,
+    paddingHorizontal: spacing.xs
+  },
+  treeDotSlot: {
+    width: 10,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  treeDot: {
+    width: 6,
+    height: 6,
+    borderRadius: radii.pill
+  },
+  treeThreadTitle: {
+    flex: 1,
+    fontSize: 14,
+    color: colors.textPrimary
+  },
+  treeThreadTime: {
+    fontSize: 12,
+    color: colors.textMuted,
+    fontVariant: ['tabular-nums']
+  },
+  treeProjectMeta: {
+    maxWidth: 84,
+    fontSize: 11.5,
+    color: colors.textMuted
+  },
+  treeShowMoreRow: {
+    paddingLeft: 22,
+    paddingVertical: 6
+  },
   codexRecentRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    minHeight: 42,
+    gap: 8,
+    minHeight: 40,
     paddingHorizontal: spacing.md,
     paddingVertical: 9
   },

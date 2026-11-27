@@ -33,6 +33,7 @@ export type CodexProjectRow = {
   markRepo: RepoMarkRepo
   primaryWorktree: CodexProjectWorktreeItem
   worktrees: CodexProjectWorktreeItem[]
+  threads: CodexRecentRow[]
   openTabCount: number
   isActive: boolean
   isPinned: boolean

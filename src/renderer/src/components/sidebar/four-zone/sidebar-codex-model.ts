@@ -90,6 +90,7 @@ export function buildCodexSidebarModel(args: {
   const toneByWorktreeId = new Map<string, CodexActivityTone>()
   const latestThreadAtByWorktreeId = new Map<string, number>()
   const worktreeIdsWithThread = new Set<string>()
+  const threadsByWorktreeId = new Map<string, CodexRecentRow[]>()
   const allRecentRows: CodexRecentRow[] = []
 
   for (const thread of args.allThreads) {
@@ -131,7 +132,7 @@ export function buildCodexSidebarModel(args: {
         executionHostId: hostId,
         connectionId: null
       }
-    allRecentRows.push({
+    const row: CodexRecentRow = {
       key: `thread:${thread.paneKey}`,
       kind: 'thread',
       title: thread.paneTitle.trim() || thread.worktree.displayName.trim() || markRepo.displayName,
@@ -147,7 +148,10 @@ export function buildCodexSidebarModel(args: {
       isUnread: thread.unread,
       timestamp: ts,
       thread
-    })
+    }
+    allRecentRows.push(row)
+    const wtThreads = threadsByWorktreeId.get(wtId)
+    if (wtThreads) { wtThreads.push(row) } else { threadsByWorktreeId.set(wtId, [row]) }
   }
 
   const projects: CodexProjectRow[] = []
@@ -198,6 +202,9 @@ export function buildCodexSidebarModel(args: {
         (a, b) => Number(b.isPinned) - Number(a.isPinned) || b.lastActivityAt - a.lastActivityAt || Number(b.isMain) - Number(a.isMain) || a.label.localeCompare(b.label)
       )
       const primaryWorktree = worktreeItems.find((item) => item.isActive) ?? worktreeItems[0]
+      const projectThreads = worktreeItems
+        .flatMap((item) => threadsByWorktreeId.get(item.id) ?? [])
+        .sort((a, b) => b.timestamp - a.timestamp || a.title.localeCompare(b.title))
       projects.push({
         key: `repo:${repo.id}:${canonicalHostId}`,
         kind: 'repo',
@@ -207,6 +214,7 @@ export function buildCodexSidebarModel(args: {
         markRepo: repo,
         primaryWorktree,
         worktrees: worktreeItems,
+        threads: projectThreads,
         openTabCount: worktreeItems.reduce((sum, item) => sum + item.openTabCount, 0),
         isActive: worktreeItems.some((item) => item.isActive),
         isPinned: worktreeItems.some((item) => item.isPinned),
@@ -259,6 +267,9 @@ export function buildCodexSidebarModel(args: {
       lastActivityAt
     }
 
+    const folderThreads = [...(threadsByWorktreeId.get(wtId) ?? [])].sort(
+      (a, b) => b.timestamp - a.timestamp || a.title.localeCompare(b.title)
+    )
     projects.push({
       key: `folder:${folder.id}`,
       kind: 'folder',
@@ -268,6 +279,7 @@ export function buildCodexSidebarModel(args: {
       markRepo,
       primaryWorktree: item,
       worktrees: [item],
+      threads: folderThreads,
       openTabCount,
       isActive,
       isPinned: folder.isPinned,
