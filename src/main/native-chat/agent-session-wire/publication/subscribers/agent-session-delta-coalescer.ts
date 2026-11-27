@@ -4,7 +4,7 @@ import { ownRetainedString } from '../../../../../shared/text/own-retained-strin
 // Coalesce token deltas into text snapshots to reduce journal writes and subscriber frames.
 // Flush text before lifecycle events so completion/approval rows cannot overtake preceding text.
 
-export const AGENT_SESSION_DELTA_COALESCE_MS = 60
+export const AGENT_SESSION_DELTA_COALESCE_MS = 24
 
 /** Bound accumulated legal deltas independently of input record admission. */
 export const AGENT_SESSION_STREAMED_TEXT_MAX_BYTES = 16 * 1024 * 1024

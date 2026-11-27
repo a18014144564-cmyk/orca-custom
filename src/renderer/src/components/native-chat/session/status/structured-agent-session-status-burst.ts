@@ -5,7 +5,7 @@ import {
   type ProjectionInput
 } from './structured-agent-session-status-membership'
 
-const STREAMING_BURST_WINDOW_MS = 33
+const STREAMING_BURST_WINDOW_MS = 16
 
 function streamingOnly(previous: ProjectionInput | undefined, next: ProjectionInput): boolean {
   if (

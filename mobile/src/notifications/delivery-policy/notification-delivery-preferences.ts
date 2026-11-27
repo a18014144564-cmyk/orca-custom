@@ -11,7 +11,7 @@ export type NotificationDeliveryPreferences = {
 }
 
 export const DEFAULT_NOTIFICATION_DELIVERY: NotificationDeliveryPreferences = {
-  onlyWhenDesktopAway: true,
+  onlyWhenDesktopAway: false,
   onlyWhenAgentNeedsInput: false,
   sound: true,
   suppressWhileViewing: true

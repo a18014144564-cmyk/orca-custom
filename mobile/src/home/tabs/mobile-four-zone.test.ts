@@ -15,7 +15,8 @@ import {
   resolveMobileHostPlatformBucket,
   resolvePlatformConnectionHealth
 } from './mobile-four-zone'
-import { FOUR_ZONE_HOME_TABS } from './home-tabs'
+import { buildFiveSlotMobileTabs, FOUR_ZONE_HOME_TABS } from './home-tabs'
+import { buildMobileRunningWindows } from './mobile-running-windows'
 import {
   moveMobileTabByOffset,
   moveMobileTabToFirst,
@@ -338,5 +339,93 @@ describe('mobile-four-zone', () => {
     expect(formatMobileRelativeTime(now - 10_000, now)).toBe('刚刚')
     expect(formatMobileRelativeTime(now - 120_000, now)).toBe('2m')
     expect(formatMobileRelativeTime(now - 7_200_000, now)).toBe('2h')
+  })
+
+  it('places the center Running tab squarely in the middle of 5 slots and filters cross-device windows by idle timeout & dismissal', () => {
+    expect(buildFiveSlotMobileTabs(FOUR_ZONE_HOME_TABS)).toEqual([
+      'teams',
+      'bots',
+      'running',
+      'projects',
+      'usage'
+    ])
+
+    const now = 10_000_000
+    const winHost = { id: 'win-1', name: '台式机 Win', credentialStatus: 'paired' } as unknown as Parameters<typeof buildMobileRunningWindows>[0]['hosts'][number]
+    const macHost = { id: 'mac-1', name: 'MacBook Pro', credentialStatus: 'paired' } as unknown as Parameters<typeof buildMobileRunningWindows>[0]['hosts'][number]
+    const botRows = [
+      {
+        key: 'b-run',
+        kind: 'bot' as const,
+        pairedHostId: 'mac-1',
+        hostLabel: 'MacBook Pro',
+        title: 'Mac 助手',
+        preview: '正在跑任务',
+        needsYou: 0,
+        dot: 'working' as const,
+        activityAt: now - 5 * 60_000,
+        unread: false
+      },
+      {
+        key: 'b-recent-idle',
+        kind: 'group' as const,
+        pairedHostId: 'win-1',
+        hostLabel: '台式机 Win',
+        title: '研发群',
+        preview: '10分钟前聊过',
+        needsYou: 0,
+        dot: 'active' as const,
+        activityAt: now - 10 * 60_000,
+        unread: false
+      },
+      {
+        key: 'b-stale-idle',
+        kind: 'bot' as const,
+        pairedHostId: 'win-1',
+        hostLabel: '台式机 Win',
+        title: '旧窗口',
+        preview: '2小时前聊过',
+        needsYou: 0,
+        dot: 'active' as const,
+        activityAt: now - 120 * 60_000,
+        unread: false
+      }
+    ] as unknown as HomeBotRow[]
+
+    const model = buildMobileRunningWindows({
+      hosts: [winHost, macHost],
+      winHostIds: new Set(['win-1']),
+      macHostIds: new Set(['mac-1']),
+      hostStates: { 'win-1': 'connected', 'mac-1': 'connected' },
+      worktreeInfo: {},
+      botRows,
+      botHomeWorktreeIds: new Set(),
+      prefs: { idleHideMs: 30 * 60_000, groupByDevice: false, dismissedAtByKey: {} },
+      now
+    })
+    expect(model.items.map((i) => `${i.platform}:${i.title}:${i.status}`)).toEqual([
+      'mac:Mac 助手:working',
+      'win:研发群:idle'
+    ])
+    expect(model.activeCount).toBe(1)
+    expect(model.idleCount).toBe(1)
+
+    // Dismissing idle windows clears only idle ones; running windows remain protected.
+    const afterClear = buildMobileRunningWindows({
+      hosts: [winHost, macHost],
+      winHostIds: new Set(['win-1']),
+      macHostIds: new Set(['mac-1']),
+      hostStates: { 'win-1': 'connected', 'mac-1': 'connected' },
+      worktreeInfo: {},
+      botRows,
+      botHomeWorktreeIds: new Set(),
+      prefs: {
+        idleHideMs: 30 * 60_000,
+        groupByDevice: false,
+        dismissedAtByKey: { 'bot:b-recent-idle': now, 'bot:b-run': now }
+      },
+      now
+    })
+    expect(afterClear.items.map((i) => i.title)).toEqual(['Mac 助手'])
   })
 })

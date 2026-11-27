@@ -1,4 +1,5 @@
 import {
+  Activity,
   Bot,
   CalendarClock,
   FolderGit2,
@@ -26,6 +27,7 @@ import { HOME_EASE_OUT, type HomeTabId } from './home-tabs'
 const TAB_ICONS: Record<HomeTabId, LucideIcon> = {
   teams: Users,
   bots: Bot,
+  running: Activity,
   projects: FolderGit2,
   feed: LayoutList,
   agents: SquareTerminal,
@@ -47,6 +49,8 @@ export function MobileHomeTabBar(props: {
   teamsBadge?: number
   /** Combined Win + Mac hosts' Needs you items; shown on Projects. */
   projectsBadge?: number
+  /** Active running/attention windows across all devices; shown on the center Running button. */
+  runningBadge?: number
   onSelect: (tab: HomeTabId) => void
   onLongPressTab?: (tab: HomeTabId) => void
 }) {
@@ -55,6 +59,7 @@ export function MobileHomeTabBar(props: {
   const labels: Record<HomeTabId, string> = {
     teams: '团队',
     bots: 'Bot',
+    running: '运行中',
     projects: '项目',
     feed: t('home.tabs.feed', 'Feed'),
     agents: t('home.tabs.agents', 'Agents'),
@@ -64,6 +69,7 @@ export function MobileHomeTabBar(props: {
   const badges: Partial<Record<HomeTabId, number>> = {
     teams: props.teamsBadge ?? 0,
     bots: props.botsBadge,
+    running: props.runningBadge ?? 0,
     projects: props.projectsBadge ?? 0,
     agents: props.agentsBadge
   }
@@ -80,6 +86,7 @@ export function MobileHomeTabBar(props: {
           icon={TAB_ICONS[tab]}
           label={labels[tab]}
           selected={tab === props.active}
+          featured={tab === 'running'}
           badge={badges[tab] ?? 0}
           onPress={() => props.onSelect(tab)}
           onLongPress={props.onLongPressTab ? () => props.onLongPressTab!(tab) : undefined}
@@ -93,6 +100,7 @@ function TabButton(props: {
   icon: LucideIcon
   label: string
   selected: boolean
+  featured?: boolean
   badge: number
   onPress: () => void
   onLongPress?: () => void
@@ -100,7 +108,12 @@ function TabButton(props: {
   useMobileColorScheme()
   const [pressed, setPressed] = useState(false)
   const Icon = props.icon
-  const tint = props.selected ? colors.textPrimary : colors.textMuted
+  const activeRunning = Boolean(props.featured && props.badge > 0)
+  const tint = props.selected
+    ? colors.textPrimary
+    : activeRunning
+      ? colors.statusAmber
+      : colors.textMuted
   return (
     <Pressable
       style={styles.tab}
@@ -115,7 +128,9 @@ function TabButton(props: {
       {/* Press feedback on the glyph only, so the label never jitters. */}
       <Animated.View
         style={[
-          styles.icon,
+          props.featured ? styles.featuredIcon : styles.icon,
+          props.featured && props.selected && styles.featuredIconSelected,
+          props.featured && !props.selected && activeRunning && styles.featuredIconLive,
           {
             transform: [{ scale: pressed ? 0.88 : 1 }],
             transitionProperty: 'transform',
@@ -124,7 +139,7 @@ function TabButton(props: {
           }
         ]}
       >
-        <Icon size={25} strokeWidth={props.selected ? 2.2 : 1.8} color={tint} />
+        <Icon size={props.featured ? 21 : 25} strokeWidth={props.selected ? 2.2 : 1.8} color={tint} />
         {props.badge > 0 ? <TabBadge count={props.badge} /> : null}
       </Animated.View>
       <Text style={[styles.label, { color: tint }]} numberOfLines={1}>
@@ -180,11 +195,29 @@ const styles = themedStyleSheet(() => ({
     paddingTop: 2
   },
   icon: { width: 30, height: 26, alignItems: 'center', justifyContent: 'center' },
+  featuredIcon: {
+    width: 44,
+    height: 28,
+    borderRadius: radii.pill,
+    backgroundColor: colors.bgPanel,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderSubtle,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  featuredIconSelected: {
+    borderColor: colors.textPrimary,
+    backgroundColor: colors.bgPanel
+  },
+  featuredIconLive: {
+    borderColor: 'rgba(245, 158, 11, 0.55)',
+    backgroundColor: 'rgba(245, 158, 11, 0.14)'
+  },
   label: { fontSize: 10.5, fontWeight: '500', letterSpacing: 0.1 },
   badge: {
     position: 'absolute',
     top: -4,
-    left: 20,
+    right: -4,
     minWidth: 17,
     height: 17,
     paddingHorizontal: 4,

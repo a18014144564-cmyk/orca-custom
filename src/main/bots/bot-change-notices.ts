@@ -14,7 +14,7 @@ import { parsePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 // changes in the following quiet window go out together at its end, instead of one notice each. Each
 // notice says which bots and which kinds of change it covers, so a reader of another bot skips it.
 
-const BOT_CHANGE_NOTICE_DELAY_MS = 500
+const BOT_CHANGE_NOTICE_DELAY_MS = 120
 
 export type BotChangeNoticeDeps = {
   emit: (scope: BotChangeScope) => void

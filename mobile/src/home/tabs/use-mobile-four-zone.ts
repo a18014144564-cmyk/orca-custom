@@ -3,12 +3,14 @@ import { useAllHostDescriptors } from '../../host-descriptors/host-descriptor-st
 import { newWorkspaceOverlayHref } from '../../new-workspace/new-workspace-overlay-route'
 import type { MobileHomeData } from '../use-mobile-home-data'
 import {
+  buildFiveSlotMobileTabs,
   CLASSIC_HOME_TABS,
   FOUR_ZONE_HOME_TABS,
   type FourZoneHomeTabId,
   type HomeTabId
 } from './home-tabs'
 import {
+  collectBotHomeWorktreeIds,
   countBotRowsNeedsYou,
   countNeedsYouForHostIds,
   DEFAULT_MOBILE_HOME_LAYOUT,
@@ -21,6 +23,7 @@ import {
   type MobileHomeLayoutMode,
   type MobileProjectsPlatform
 } from './mobile-four-zone'
+import { countActiveMobileRunningWindows } from './mobile-running-windows'
 import {
   loadMobileFourZoneTabOrder,
   normalizeMobileFourZoneTabOrder,
@@ -41,8 +44,10 @@ export function useMobileFourZoneHome(data: MobileHomeData) {
   )
   const hostDescriptors = useAllHostDescriptors()
 
-  const activeTabs: readonly HomeTabId[] =
-    layoutMode === 'four-zone' ? fourZoneTabOrder : CLASSIC_HOME_TABS
+  const activeTabs: readonly HomeTabId[] = useMemo(
+    () => (layoutMode === 'four-zone' ? buildFiveSlotMobileTabs(fourZoneTabOrder) : CLASSIC_HOME_TABS),
+    [fourZoneTabOrder, layoutMode]
+  )
   const defaultTab: HomeTabId = layoutMode === 'four-zone' ? fourZoneTabOrder[0]! : 'feed'
 
   useEffect(() => {
@@ -150,6 +155,21 @@ export function useMobileFourZoneHome(data: MobileHomeData) {
     [data.needsYouByHost, partitionedCatalog.macHosts]
   )
   const projectsBadge = winBadge + macBadge
+  const botHomeWorktreeIds = useMemo(
+    () => collectBotHomeWorktreeIds(data.bots.rows),
+    [data.bots.rows]
+  )
+  const runningBadge = useMemo(
+    () =>
+      countActiveMobileRunningWindows({
+        hosts: data.sortedHostCatalog,
+        hostStates: data.hostStates,
+        worktreeInfo: data.worktreeInfo,
+        botRows: data.bots.rows,
+        botHomeWorktreeIds
+      }),
+    [botHomeWorktreeIds, data.bots.rows, data.hostStates, data.sortedHostCatalog, data.worktreeInfo]
+  )
 
   useEffect(() => {
     if (!platformLoaded || !data.hostCatalogLoaded) {
@@ -239,6 +259,7 @@ export function useMobileFourZoneHome(data: MobileHomeData) {
     teamsBadge,
     soloBotsBadge,
     projectsBadge,
+    runningBadge,
     resolveHomeFab
   }
 }

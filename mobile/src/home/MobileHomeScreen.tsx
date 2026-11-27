@@ -35,6 +35,7 @@ import { MobileHomeAgentsTab } from './tabs/MobileHomeAgentsTab'
 import { MobileHomeAutomationsTab } from './tabs/MobileHomeAutomationsTab'
 import { MobileHomeBotsTab } from './tabs/MobileHomeBotsTab'
 import { MobileHomeProjectsTab } from './tabs/MobileHomeProjectsTab'
+import { MobileHomeRunningTab } from './tabs/MobileHomeRunningTab'
 import { MobileHomeTeamsTab } from './tabs/MobileHomeTeamsTab'
 import { MobileHomeTabHeaderButton } from './tabs/MobileHomeTabHeader'
 import { useMobileFourZoneHome } from './tabs/use-mobile-four-zone'
@@ -200,7 +201,7 @@ export function MobileHomeScreen() {
   const actionTargetConnected =
     actionTarget != null && data.hostStates[actionTarget.id] === 'connected'
 
-  const { projectsPlatform, selectProjectsPlatform, partitionedCatalog, teamsBadge, soloBotsBadge, projectsBadge, resolveHomeFab } = zone
+  const { projectsPlatform, selectProjectsPlatform, partitionedCatalog, teamsBadge, soloBotsBadge, projectsBadge, runningBadge, resolveHomeFab } = zone
 
   const automationsHostConnected =
     automationsHostId != null && data.hostStates[automationsHostId] === 'connected'
@@ -247,6 +248,7 @@ export function MobileHomeScreen() {
             teamsBadge={teamsBadge}
             soloBotsBadge={soloBotsBadge}
             projectsBadge={projectsBadge}
+            runningBadge={runningBadge}
             canCreateBot={canCreateBot}
             stageTarget={stageTarget}
             onChangeStageTarget={setStageTarget}
@@ -273,6 +275,16 @@ export function MobileHomeScreen() {
               <View key={id} style={id === tab ? styles.fill : styles.hidden}>
                 {id === 'teams' ? (
                   <MobileHomeTeamsTab data={data} bottomInset={contentBottom} onOpenBot={openBot} onPairDesktop={pairDesktop} onOpenSettings={openSettings} onToggleClassicLayout={toggleLayoutMode} />
+                ) : id === 'running' ? (
+                  <MobileHomeRunningTab
+                    data={data}
+                    winHosts={partitionedCatalog.winHosts}
+                    macHosts={partitionedCatalog.macHosts}
+                    bottomInset={contentBottom}
+                    onOpenAgent={agentActions.handlers.onOpen}
+                    onOpenBot={openBot}
+                    onOpenSettings={openSettings}
+                  />
                 ) : id === 'projects' ? (
                   <MobileHomeProjectsTab platform={projectsPlatform} onSelectPlatform={selectProjectsPlatform} data={data} winHosts={partitionedCatalog.winHosts} macHosts={partitionedCatalog.macHosts} bottomInset={contentBottom} onOpenHost={openHost} onOpenHostActions={openHostActions} onOpenWorktree={openWorktree} onOpenAgent={agentActions.handlers.onOpen} onPairDesktop={pairDesktop} onOpenSettings={openSettings} onToggleClassicLayout={toggleLayoutMode} />
                 ) : id === 'feed' ? (
@@ -315,6 +327,7 @@ export function MobileHomeScreen() {
             botsBadge={layoutMode === 'four-zone' ? soloBotsBadge : data.bots.needsYou}
             teamsBadge={teamsBadge}
             projectsBadge={projectsBadge}
+            runningBadge={runningBadge}
             onSelect={selectTab}
                 onLongPressTab={
                   layoutMode === 'four-zone'

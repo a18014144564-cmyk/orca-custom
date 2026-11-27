@@ -40,6 +40,12 @@ const TOKEN_TIMEOUT_MS = 2_000
 type RegistrationRecords = { registered: Set<string>; pending: Set<string> }
 
 const hostsById = new Map<string, HostPushState>()
+/** Hosts where `notifications.registerPush` actually succeeded on the active connection. */
+const liveRegisteredHosts = new Set<string>()
+
+export function isHostRemotePushRegistered(hostId: string): boolean {
+  return liveRegisteredHosts.has(hostId)
+}
 
 export function getHostPushSupported(hostId: string): boolean | null {
   return hostsById.get(hostId)?.supported ?? null
@@ -149,6 +155,7 @@ async function reconcileHost(hostId: string): Promise<void> {
     return
   }
   if (!(await loadPushNotificationsEnabled())) {
+    liveRegisteredHosts.delete(hostId)
     // Saved consent recovers a disable even if its pending-record write failed.
     if (await sendUnregister(client, REQUEST_TIMEOUT_MS)) {
       await mutateRecords((current) => {
@@ -175,16 +182,20 @@ async function reconcileHost(hostId: string): Promise<void> {
     generation !== consentGeneration ||
     AppState.currentState !== 'active'
   ) {
+    liveRegisteredHosts.delete(hostId)
     return
   }
   if (!(await sendRegister(client, token, filter)) || hostsById.get(hostId) !== state) {
+    liveRegisteredHosts.delete(hostId)
     return
   }
   if (generation !== consentGeneration) {
+    liveRegisteredHosts.delete(hostId)
     await mutateRecords((current) => current.pending.add(hostId))
     void enqueueReconcile(hostId)
     return
   }
+  liveRegisteredHosts.add(hostId)
   await mutateRecords((current) => current.registered.add(hostId))
 }
 
@@ -221,6 +232,7 @@ export function attachPushRegistration(
   const connection = state.connection
   return () => {
     if (connection.client === client) {
+      liveRegisteredHosts.delete(hostId)
       connection.support?.retire()
       connection.support = null
       connection.client = null

@@ -12,9 +12,10 @@ import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { Worktree } from '../../worktree/workspace-list/workspace-list-types'
 import type { HomeBotRow } from '../bots/home-bot-rows'
 import type { MobileHomeData } from '../use-mobile-home-data'
-import type { FourZoneHomeTabId, HomeTabId } from '../tabs/home-tabs'
+import type { FiveSlotHomeTabId, FourZoneHomeTabId, HomeTabId } from '../tabs/home-tabs'
 import { MobileHomeBotsTab } from '../tabs/MobileHomeBotsTab'
 import { MobileHomeProjectsTab } from '../tabs/MobileHomeProjectsTab'
+import { MobileHomeRunningTab } from '../tabs/MobileHomeRunningTab'
 import { MobileHomeTeamsTab } from '../tabs/MobileHomeTeamsTab'
 import { MobileHomeUsageTab } from '../tabs/MobileHomeUsageTab'
 import { collectBotHomeWorktreeIds, type MobileProjectsPlatform } from '../tabs/mobile-four-zone'
@@ -38,11 +39,12 @@ export function MobileFoldableWorkbench(props: {
   teamsBadge: number
   soloBotsBadge: number
   projectsBadge: number
+  runningBadge: number
   canCreateBot: boolean
   stageTarget: FoldableStageTarget | null
   onChangeStageTarget: (next: FoldableStageTarget | null) => void
   clientOf: (pairedHostId: string) => RpcClient | null
-  onSelectTab: (tab: FourZoneHomeTabId) => void
+  onSelectTab: (tab: FiveSlotHomeTabId) => void
   onLongPressTab: (tab: FourZoneHomeTabId) => void
   onSelectProjectsPlatform: (platform: MobileProjectsPlatform) => void
   onOpenHost: (host: HostCatalogEntry) => void
@@ -287,6 +289,7 @@ export function MobileFoldableWorkbench(props: {
         teamsBadge={props.teamsBadge}
         botsBadge={props.soloBotsBadge}
         projectsBadge={props.projectsBadge}
+        runningBadge={props.runningBadge}
         onSelect={(next) => {
           props.onSelectTab(next)
           if (next !== 'usage') {
@@ -328,6 +331,19 @@ export function MobileFoldableWorkbench(props: {
               />
             </View>
           ) : null}
+          {visitedMidTabs.has('running') ? (
+            <View style={props.activeTab === 'running' ? styles.fill : styles.hidden}>
+              <MobileHomeRunningTab
+                data={data}
+                winHosts={props.winHosts}
+                macHosts={props.macHosts}
+                bottomInset={16}
+                onOpenAgent={handleOpenAgentInStage}
+                onOpenBot={handleOpenBotInStage}
+                onOpenSettings={props.onOpenSettings}
+              />
+            </View>
+          ) : null}
           {visitedMidTabs.has('bots') ? (
             <View style={props.activeTab === 'bots' ? styles.fill : styles.hidden}>
               <MobileHomeBotsTab
@@ -340,10 +356,14 @@ export function MobileFoldableWorkbench(props: {
               />
             </View>
           ) : null}
-          {visitedMidTabs.has('projects') || (props.activeTab !== 'teams' && props.activeTab !== 'bots') ? (
+          {visitedMidTabs.has('projects') ||
+          (props.activeTab !== 'teams' && props.activeTab !== 'bots' && props.activeTab !== 'running') ? (
             <View
               style={
-                props.activeTab !== 'teams' && props.activeTab !== 'bots' && props.activeTab !== 'usage'
+                props.activeTab !== 'teams' &&
+                props.activeTab !== 'bots' &&
+                props.activeTab !== 'running' &&
+                props.activeTab !== 'usage'
                   ? styles.fill
                   : styles.hidden
               }

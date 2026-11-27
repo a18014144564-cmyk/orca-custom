@@ -6,8 +6,8 @@ import {
 
 const ROWS_KEY = 'rows'
 // A busy agent changes its row on every step; phones re-read the whole worktree.ps per notice.
-const ROWS_FLUSH_MS = 500
-const ROWS_MAX_WAIT_MS = 2000
+const ROWS_FLUSH_MS = 120
+const ROWS_MAX_WAIT_MS = 400
 
 /** Tells phones an agent's status changed, so their workspace lists re-read worktree.ps instead of polling. */
 export class WorktreeRowsChanges {

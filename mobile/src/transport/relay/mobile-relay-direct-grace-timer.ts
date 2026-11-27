@@ -2,7 +2,7 @@ import type { MobileEndpointSupervisorDependencies } from '../connection/mobile-
 import type { StableLogicalRpcClient } from '../connection/stable-logical-rpc-client'
 
 // Give direct a head start, then race relay so a black-holed LAN cannot block recovery for its whole connect deadline.
-const DIRECT_DIAL_GRACE_MS = 2500
+const DIRECT_DIAL_GRACE_MS = 1000
 
 type DirectGraceTimerDependencies = Pick<
   MobileEndpointSupervisorDependencies,

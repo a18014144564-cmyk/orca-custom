@@ -3,7 +3,11 @@ import { dismissHostPushNotification } from './dismissal/push-socket-dismissal'
 import type { DismissNotificationEvent } from './dismissal/desktop-notification-events'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { waitForPushFallback } from './push-registration/push-fallback'
-import { getHostPushSupported, getHostPushSupportCompletion } from './push-registration'
+import {
+  getHostPushSupported,
+  getHostPushSupportCompletion,
+  isHostRemotePushRegistered
+} from './push-registration'
 import { loadHostCatalog } from '../host-catalog/host-store'
 import { deriveHostFingerprint } from './payload-identity/push-host-fingerprint'
 import { presentForegroundPush } from './foreground-delivery/android-foreground-push'
@@ -37,11 +41,16 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
       getHostPushSupportCompletion(hostId, client) === support
     let noToken = false
     const isCurrent = () =>
-      currentConnection() && (noToken || getHostPushSupported(hostId) === false)
+      currentConnection() &&
+      (!isHostRemotePushRegistered(hostId) || noToken || getHostPushSupported(hostId) === false)
     async function prepareFallback(): Promise<boolean> {
       noToken = false
       if (!currentConnection()) {
         return false
+      }
+      // Custom/self-signed builds and unreachable gateways never register remote push; deliver immediately over live WS.
+      if (!isHostRemotePushRegistered(hostId)) {
+        return true
       }
       if (getHostPushSupported(hostId) !== false) {
         noToken = (await waitForPushFallback([support], pending.signal)) === 'no-token'

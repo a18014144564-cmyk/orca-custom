@@ -27,7 +27,9 @@ export async function presentForegroundPush(
       sound: content.sound === 'default' ? 'default' : false
     },
     trigger:
-      typeof content.data?.channelId === 'string' ? { channelId: content.data.channelId } : null
+      Platform.OS === 'android' && typeof content.data?.channelId === 'string'
+        ? { channelId: content.data.channelId }
+        : null
   })
 }
 

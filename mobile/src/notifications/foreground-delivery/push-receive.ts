@@ -2,7 +2,8 @@ import { wasPushDismissed } from '../dismissal/push-dismissal-watermarks'
 import { botAccessRequestIdOfNotice } from '../../../../src/shared/bots/bot-access-request'
 import { dismissPresentedPushNotification } from '../dismissal/push-tray-dismissal'
 import { shouldSuppressNotificationWhileViewing } from '../delivery-policy/notification-viewing-policy'
-import { loadPushNotificationsEnabled } from '../../storage/preferences'
+import { getNotificationPermissionState } from '../delivery-policy/notification-permissions'
+import { readPushNotificationsPreference } from '../../storage/preferences'
 import { loadHostCatalog } from '../../host-catalog/host-store'
 import { resolveHostIdForFingerprint } from '../payload-identity/push-host-fingerprint'
 import { readOrcaPushPayload, type OrcaPushPayload } from '../payload-identity/push-payload'
@@ -116,7 +117,11 @@ async function shouldSuppressForegroundPush(
   if (!hostId) {
     return true
   }
-  if (!(await loadPushNotificationsEnabled())) {
+  const pref = await readPushNotificationsPreference()
+  if (pref.value === false) {
+    return true
+  }
+  if (pref.value === null && !(await getNotificationPermissionState()).granted) {
     return true
   }
   if (shouldSuppressNotificationWhileViewing(payload, hostId, preferences.suppressWhileViewing)) {

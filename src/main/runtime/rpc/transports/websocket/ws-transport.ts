@@ -242,15 +242,20 @@ export class WebSocketTransport implements RpcTransport {
         !this.sourceCap.admit(socket)
       ) {
         socket.destroy()
+        return
       }
+      // Disable Nagle's algorithm so small RPC/chat/status frames flush immediately instead of waiting for Delayed ACK.
+      socket.setNoDelay(true)
     })
 
     const wss = new WebSocketServer({
       server: httpServer,
+      perMessageDeflate: false,
       maxPayload: WEBSOCKET_TRANSPORT_MAX_MESSAGE_BYTES
     })
 
     wss.on('connection', (ws, request) => {
+      request.socket.setNoDelay(true)
       this.peers.set(ws, {
         socket: request.socket,
         sourceClass: classifyNetworkSource(request.socket.remoteAddress)

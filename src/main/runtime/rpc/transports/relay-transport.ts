@@ -64,8 +64,14 @@ export class CloudRelayTransport implements RpcTransport, MobileSocketTransport 
     this.onDataDialSettled = options.onDataDialSettled
     this.createSocket =
       options.createSocket ??
-      ((url) =>
-        new WebSocket(url, { perMessageDeflate: false, maxPayload: MAX_RELAY_MESSAGE_BYTES }))
+      ((url) => {
+        const ws = new WebSocket(url, { perMessageDeflate: false, maxPayload: MAX_RELAY_MESSAGE_BYTES })
+        ws.once('open', () => {
+          const rawSocket = (ws as unknown as { _socket?: { setNoDelay?: (noDelay?: boolean) => void } })._socket
+          rawSocket?.setNoDelay?.(true)
+        })
+        return ws
+      })
   }
 
   onMessage(handler: Parameters<MobileSocketTransport['onMessage']>[0]): void {

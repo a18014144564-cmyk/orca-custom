@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Platform } from 'react-native'
 import { ListRow } from '../components/list/ListGroup'
 import { useAllHostClients } from '../transport/connection/use-all-host-clients'
 import { loadHostCatalog } from '../host-catalog/host-store'
@@ -10,12 +11,13 @@ import * as Notifications from 'expo-notifications'
 import { waitForPushFallback } from '../notifications/push-registration/push-fallback'
 import {
   getHostPushSupported,
-  getHostPushSupportCompletion
+  getHostPushSupportCompletion,
+  isHostRemotePushRegistered
 } from '../notifications/push-registration'
 import { formatMobileNativeChatDuration } from '../session/native-chat/transcript/messages/native-chat-turn-status-copy'
 import type { Translate } from '../i18n/mobile-i18n'
 import { getNotificationPermissionState } from '../notifications/delivery-policy/notification-permissions'
-import { loadPushNotificationsEnabled } from '../storage/preferences'
+import { readPushNotificationsPreference } from '../storage/preferences'
 import { loadNotificationDeliveryPreferences } from '../notifications/delivery-policy/notification-delivery-preferences'
 import {
   DESKTOP_NOTIFICATION_CHANNEL_ID,
@@ -77,7 +79,10 @@ export function NotificationDisplayTest({ onTroubleshoot }: { onTroubleshoot: ()
           ),
           sound: sound ? 'default' : false
         },
-        trigger: { channelId: `${DESKTOP_NOTIFICATION_CHANNEL_ID}${sound ? '' : '-silent'}` }
+        trigger:
+          Platform.OS === 'android'
+            ? { channelId: `${DESKTOP_NOTIFICATION_CHANNEL_ID}${sound ? '' : '-silent'}` }
+            : null
       })
       setMessage(
         liveFallback
@@ -94,7 +99,8 @@ export function NotificationDisplayTest({ onTroubleshoot }: { onTroubleshoot: ()
       )
     }
     try {
-      if (!(await loadPushNotificationsEnabled())) {
+      const pref = await readPushNotificationsPreference()
+      if (pref.value === false) {
         throw new Error(
           t(
             'settings.notificationDisplayTest.disabled',
@@ -124,6 +130,11 @@ export function NotificationDisplayTest({ onTroubleshoot }: { onTroubleshoot: ()
         'settings.notificationDisplayTest.unsupportedHost',
         'This desktop does not support push notifications. Update it to receive push.'
       )
+      const anyRegistered = connected.some(({ hostId }) => isHostRemotePushRegistered(hostId))
+      if (!anyRegistered) {
+        await localTest('已启用实时连接本地通知。', true)
+        return
+      }
       const fallback = connected.every(({ hostId }) => getHostPushSupported(hostId) === false)
         ? 'unsupported-host'
         : await waitForPushFallback(

@@ -4,7 +4,7 @@ import { selectFrontTab } from '@/store/slices/tabs/active-tab-selection'
 import type { HostGroup, Member } from './structured-agent-session-status-membership'
 
 /** How often a chat nobody is reading republishes its streaming preview into the store. */
-export const HIDDEN_PREVIEW_INTERVAL_MS = 250
+export const HIDDEN_PREVIEW_INTERVAL_MS = 120
 
 // What a working turn streams: the newest prose, the tool it is in, and the stamp each frame moves.
 // Any other field is a transition.
