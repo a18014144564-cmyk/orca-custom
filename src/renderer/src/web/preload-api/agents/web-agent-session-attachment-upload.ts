@@ -2,7 +2,6 @@ import {
   AGENT_SESSION_ATTACHMENT_CHUNK_BYTES,
   AGENT_SESSION_ATTACHMENT_MAX_BYTES,
   agentSessionAttachmentAppends,
-  agentSessionAttachmentUploadDestination,
   agentSessionPastedImageName,
   base64DecodedByteLength,
   type AgentSessionAttachmentPathUploadResult,
@@ -60,11 +59,7 @@ async function uploadWebAgentSessionAttachment(
   const { uploadId } = await callPinned<{ uploadId: string }>(
     target,
     'agentSessionAttachment.uploadStart',
-    {
-      ...agentSessionAttachmentUploadDestination(target.sessionId),
-      name: file.name,
-      byteLength: file.byteLength
-    }
+    { sessionId: target.sessionId, name: file.name, byteLength: file.byteLength }
   )
   try {
     for await (const chunk of appends) {

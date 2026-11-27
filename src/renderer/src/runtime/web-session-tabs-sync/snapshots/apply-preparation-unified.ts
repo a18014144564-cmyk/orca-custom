@@ -36,10 +36,7 @@ export function prepareWebSessionTabsSnapshotUnified(
     retainedUnifiedTabs,
     existingViewModeByTabId,
     hostGroupIdByTabId,
-    targetGroupId,
-    mayAdoptInitialHostGroups,
-    directlyOpened,
-    framePublishesDirectChat
+    targetGroupId
   } = base
   const mirroredTerminalUnifiedTabs = mirroredTerminalTabs.map((entry) =>
     buildTerminalUnifiedTab(
@@ -58,10 +55,6 @@ export function prepareWebSessionTabsSnapshotUnified(
     ...mirroredEditorUnifiedTabs,
     ...mirroredAgentUnifiedTabs
   ]
-  // A chat retained from a newer list is not evidence that this frame could have placed any tab.
-  const adoptsInitialHostGroups =
-    mayAdoptInitialHostGroups &&
-    (framePublishesDirectChat || mirroredUnifiedTabs.length > (directlyOpened?.size ?? 0))
   const nextUnifiedTabs =
     retainedUnifiedTabs.length + mirroredUnifiedTabs.length > 0
       ? [...retainedUnifiedTabs, ...mirroredUnifiedTabs]
@@ -246,7 +239,6 @@ export function prepareWebSessionTabsSnapshotUnified(
 
   return {
     ...base,
-    adoptsInitialHostGroups,
     mirroredTerminalUnifiedTabs,
     mirroredBrowserUnifiedTabs,
     mirroredEditorUnifiedTabs,

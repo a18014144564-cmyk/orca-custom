@@ -56,6 +56,9 @@ export type CodexRecentRow = {
   isUnread: boolean
   timestamp: number
   thread: AgentPaneThread | null
+  isArchived?: boolean
+  archivedSessionId?: string | null
+  archivedAgentType?: string | null
 }
 
 export type CodexSidebarModel = {

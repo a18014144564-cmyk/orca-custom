@@ -19,8 +19,6 @@ type RuntimeRpcCallOptions = {
   reuseRecentCompatibilityFailure?: boolean
   skipCompatibilityCheck?: boolean
   signal?: AbortSignal
-  /** Stops waiting for compatibility without changing how the admitted RPC is transported. */
-  admissionSignal?: AbortSignal
   expectedEnvironmentPairingRevision?: number
   expectedEnvironmentRuntimeId?: string
   beforeSend?: () => void
@@ -46,7 +44,7 @@ export async function callRuntimeRpcResponse<TResult>(
   params?: unknown,
   options: RuntimeRpcCallOptions = {}
 ): Promise<RuntimeRpcSuccess<TResult>> {
-  if (options.signal?.aborted || options.admissionSignal?.aborted) {
+  if (options.signal?.aborted) {
     throw createRuntimeRpcAbortError()
   }
   const background = isBackgroundRuntimeCall(options.background, params)
@@ -71,10 +69,10 @@ export async function callRuntimeRpcResponse<TResult>(
             expectedEnvironmentPairingRevision,
             wake
           }),
-          options.admissionSignal ?? options.signal
+          options.signal
         )
       : null
-  if (options.signal?.aborted || options.admissionSignal?.aborted) {
+  if (options.signal?.aborted) {
     throw createRuntimeRpcAbortError()
   }
   const selectedParams = options.paramsForStatus

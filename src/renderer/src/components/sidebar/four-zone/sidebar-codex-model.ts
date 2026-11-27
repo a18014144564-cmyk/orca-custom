@@ -20,6 +20,10 @@ import {
 } from './sidebar-codex-bot-filter'
 import { applyCodexThreadProjectOverrides } from './sidebar-codex-thread-moves'
 import {
+  mergeArchivedCodexThreads,
+  type ArchivedCodexThread
+} from './sidebar-codex-thread-archive'
+import {
   CODEX_TONE_PRIORITY,
   buildFolderRepoMark,
   higherCodexTone,
@@ -65,6 +69,7 @@ export function buildCodexSidebarModel(args: {
   selectedPaneKey: string | null
   onlyActiveRecent: boolean
   threadProjectOverrides?: Readonly<Record<string, string>>
+  archivedThreads?: readonly ArchivedCodexThread[]
 }): CodexSidebarModel {
   const botOwnedWorktreeIdentities = args.botOwnedWorktreeIdentities ?? EMPTY_STRING_SET
   const excludedBotSessionIds = args.excludedBotSessionIds ?? EMPTY_STRING_SET
@@ -77,13 +82,8 @@ export function buildCodexSidebarModel(args: {
   const visibleFolders: FolderWorkspace[] = []
   const folderMarkByWorktreeId = new Map<string, RepoMarkRepo>()
   for (const folder of args.folderWorkspaces) {
-    if (isHome(folder, args.botHomeOwners)) {
-      botHomeWorktreeIds.add(folderWorkspaceKey(folder.id))
-      continue
-    }
-    if (folder.isArchived || folder.orcadRetained || !hostIdSet.has(getFolderWorkspaceWorktreeHostId(folder))) {
-      continue
-    }
+    if (isHome(folder, args.botHomeOwners)) { botHomeWorktreeIds.add(folderWorkspaceKey(folder.id)); continue }
+    if (folder.isArchived || folder.orcadRetained || !hostIdSet.has(getFolderWorkspaceWorktreeHostId(folder))) { continue }
     visibleFolders.push(folder)
     folderMarkByWorktreeId.set(folderWorkspaceKey(folder.id), buildFolderRepoMark(folder))
   }
@@ -159,18 +159,11 @@ export function buildCodexSidebarModel(args: {
       continue
     }
     const matchingWorktrees = (args.worktreesByRepo[repo.id] ?? []).filter((wt) => {
-      if (wt.isArchived) {
-        return false
-      }
+      if (wt.isArchived) { return false }
       const hostId = getWorktreeExecutionHostId(wt, repo, args.defaultHostId)
-      return (
-        hostIdSet.has(hostId) &&
-        !isBotOrOrchestrationWorktree(wt, hostId, botOwnedWorktreeIdentities, args.worktreeLineageById)
-      )
+      return hostIdSet.has(hostId) && !isBotOrOrchestrationWorktree(wt, hostId, botOwnedWorktreeIdentities, args.worktreeLineageById)
     })
-    if (matchingWorktrees.length === 0) {
-      continue
-    }
+    if (matchingWorktrees.length === 0) { continue }
 
     const worktreesByHost = new Map<ExecutionHostId, CodexProjectWorktreeItem[]>()
     for (const wt of matchingWorktrees) {
@@ -304,6 +297,7 @@ export function buildCodexSidebarModel(args: {
     }
   }
 
+  mergeArchivedCodexThreads({ projects, liveRows: allRecentRows, archivedThreads: args.archivedThreads, hostIdSet, botHomeWorktreeIds, activeWorktreeId: args.activeWorktreeId, selectedPaneKey: args.selectedPaneKey })
   applyCodexThreadProjectOverrides(projects, args.threadProjectOverrides)
 
   projects.sort(
@@ -314,8 +308,7 @@ export function buildCodexSidebarModel(args: {
   )
 
   const recentItems = args.onlyActiveRecent
-    ? allRecentRows.filter((row) => row.statusTone === 'working' || row.statusTone === 'attention' || row.isUnread || row.isActive)
+    ? allRecentRows.filter((r) => r.statusTone === 'working' || r.statusTone === 'attention' || r.isUnread || r.isActive)
     : allRecentRows
-
   return { projects, recentItems, totalRecentCount: allRecentRows.length }
 }

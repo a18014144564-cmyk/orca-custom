@@ -205,10 +205,9 @@ async function reconcileWebRuntimeSessionTabs(
               recovered,
               environmentId,
               undefined,
-              {
-                requestReceivedFrame: receivedFrame,
-                reconcileBrowserPage: options.reconcileBrowserPage
-              },
+              options.reconcileBrowserPage
+                ? { reconcileBrowserPage: options.reconcileBrowserPage }
+                : undefined,
               changedAgentPaneKeys
             )
           : state

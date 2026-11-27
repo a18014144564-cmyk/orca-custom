@@ -76,14 +76,12 @@ export function registerBrowserPasswordsEntryHandlers(): void {
         return { ok: false, reason: password.reason === 'not-found' ? 'not-found' : 'unavailable' }
       }
       const copied = password.value
-      await clipboard.writeText(copied)
+      clipboard.writeText(copied)
       setTimeout(() => {
         // Why compare first: never wipe something the user copied afterwards.
-        void clipboard.readText().then((current) => {
-          if (current === copied) {
-            clipboard.clear()
-          }
-        })
+        if (clipboard.readText() === copied) {
+          clipboard.clear()
+        }
       }, CLIPBOARD_CLEAR_MS).unref?.()
       return { ok: true }
     }

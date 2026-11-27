@@ -2,11 +2,7 @@ import { isDeepStrictEqual } from 'node:util'
 import { isAlias, isMap, isNode, isScalar, isSeq, parseDocument, visit } from 'yaml'
 import type { Document, YAMLMap, YAMLSeq } from 'yaml'
 import type { HermesConfig } from './hermes-config-yaml'
-import {
-  HERMES_EDITED_LISTS,
-  applyHermesPluginSourceEdits,
-  isUnsetHermesValue
-} from './hermes-config-source-edits'
+import { HERMES_EDITED_LISTS, applyHermesPluginSourceEdits } from './hermes-config-source-edits'
 
 function preserveRemovedComments(sequence: YAMLSeq, removed: unknown[], first: unknown): void {
   const comments = removed.flatMap((node) =>
@@ -27,14 +23,14 @@ function updateStringSequence(
   key: string,
   values: unknown
 ): void {
-  if (values === undefined || values === null) {
+  if (values === undefined) {
     return
   }
   if (!Array.isArray(values) || values.some((value) => typeof value !== 'string')) {
     throw new Error(`Hermes ${sectionKey}.${key} must be a string list`)
   }
   const sequence = section.get(key, true)
-  if (sequence === undefined || isUnsetHermesValue(sequence)) {
+  if (sequence === undefined) {
     section.set(key, values)
     return
   }
@@ -99,7 +95,7 @@ export function updateHermesPluginDocument(
         continue
       }
       let section = document.get(sectionKey, true)
-      if (section === undefined || isUnsetHermesValue(section)) {
+      if (section === undefined) {
         document.set(sectionKey, document.createNode({}))
         section = document.get(sectionKey, true)
       }
@@ -111,7 +107,7 @@ export function updateHermesPluginDocument(
       }
       for (const key of keys) {
         const existing = section.get(key, true)
-        if (existing === undefined || isUnsetHermesValue(existing)) {
+        if (existing === undefined) {
           continue
         }
         // Aliases into an edited list could silently change unrelated settings.

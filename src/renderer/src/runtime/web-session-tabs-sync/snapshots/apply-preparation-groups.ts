@@ -7,11 +7,7 @@ import {
 } from '../../browser/placement/web-session-browser-placement'
 import { peekWebSessionTerminalPlacementGroup } from '../../hosted-terminals/placement/web-session-terminal-placement'
 import { reconcileClientOwnedTabPlacement } from '../placement/web-session-client-owned-tab-placement'
-import {
-  buildMirroredHostGroups,
-  placeUngroupedLinkedChats,
-  retainClientPlacedMirroredTabs
-} from '../placement/layout-groups'
+import { buildMirroredHostGroups, retainClientPlacedMirroredTabs } from '../placement/layout-groups'
 import { sanitizeRecentTabIds, pushRecentTabId } from './state-equality-core'
 import { pruneTabGroupLayout } from '../placement/tab-group-layout-tree'
 import type { WebSessionTabsSyncState } from '../state'
@@ -27,10 +23,6 @@ export function prepareWebSessionTabsSnapshotGroups(
     worktreeId,
     now,
     options,
-    adoptsInitialHostGroups,
-    directlyOpened,
-    directlyOpenedWithIncomingGroup,
-    hostGroupIdByTabId,
     terminalSurfaceTabs,
     mirroredBrowserTabs,
     mirroredEditorTabs,
@@ -60,7 +52,7 @@ export function prepareWebSessionTabsSnapshotGroups(
       return keepSplitLandingPlacement(state, worktreeId, currentGroups)
     }
     // preserveLocalLayout owns first adoption too; repair rendered leaves/groups or new tabs can land in invisible groups.
-    if (!options?.preserveLocalLayout && (currentGroups.length === 0 || adoptsInitialHostGroups)) {
+    if (!nextUnifiedTabs || (currentGroups.length === 0 && !options?.preserveLocalLayout)) {
       return null
     }
     // Entity-identical local/provisional-to-mirror replacements are renames; preserve position and focus.
@@ -157,16 +149,7 @@ export function prepareWebSessionTabsSnapshotGroups(
     if (snapshot.tabGroups && snapshot.tabGroups.length > 0) {
       return buildMirroredHostGroups({
         currentGroups,
-        hostGroups:
-          adoptsInitialHostGroups && directlyOpened
-            ? placeUngroupedLinkedChats(
-                snapshot.tabGroups,
-                snapshot.activeGroupId,
-                directlyOpened,
-                directlyOpenedWithIncomingGroup,
-                hostGroupIdByTabId
-              )
-            : snapshot.tabGroups,
+        hostGroups: snapshot.tabGroups,
         hostToLocalTabId,
         mirroredUnifiedIds,
         nextActiveUnifiedTabId,
@@ -254,11 +237,6 @@ export function prepareWebSessionTabsSnapshotGroups(
       hostTabBarOrder.length > 0 ? hostTabBarOrder : mirroredUnifiedTabs.map((tab) => tab.id)
     for (const tabId of hostOrMirroredOrder) {
       push(tabId)
-    }
-    if (hostTabBarOrder.length > 0 && directlyOpened) {
-      for (const { unifiedTab } of directlyOpened.values()) {
-        push(unifiedTab.id)
-      }
     }
     return next
   })()

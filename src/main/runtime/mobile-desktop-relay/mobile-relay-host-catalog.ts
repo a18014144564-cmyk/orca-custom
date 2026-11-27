@@ -21,11 +21,6 @@ import { normalizePairedServerRow } from '../../../shared/sidebar-list/feed-fact
 import type { MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
 import { describeRelayHosts, relayHostFence } from './mobile-relay-host-descriptions'
 import {
-  RelayHostRowsAnnouncer,
-  relayHostRowsSources,
-  type RelayPhoneReader
-} from './mobile-relay-host-rows-announcer'
-import {
   RelayHostListAnnouncer,
   type RelayHostListAnnouncerSources
 } from './mobile-relay-host-list-announcer'
@@ -160,9 +155,9 @@ export class MobileRelayHostCatalog {
 
   private announcer: RelayHostListAnnouncer | null = null
 
-  async list(reader?: RelayPhoneReader): Promise<MobileRelayHostsListResult> {
+  async list(): Promise<MobileRelayHostsListResult> {
     const result = await this.describe()
-    this.announcer?.listed(result, reader)
+    this.announcer?.listed(result)
     return result
   }
 
@@ -199,8 +194,7 @@ export class MobileRelayHostCatalog {
           relay,
           stoppedOnDesktop,
           unavailableOnDesktop,
-          installationId,
-          rowChanges
+          installationId
         }) => ({
           hostId,
           label,
@@ -208,24 +202,13 @@ export class MobileRelayHostCatalog {
           relay,
           ...(stoppedOnDesktop ? { stoppedOnDesktop } : {}),
           ...(unavailableOnDesktop ? { unavailableOnDesktop } : {}),
-          ...(installationId ? { installationId } : {}),
-          ...(rowChanges ? { rowChanges } : {})
+          ...(installationId ? { installationId } : {})
         })
       )
     }
   }
 
-  private rowsAnnouncer: RelayHostRowsAnnouncer | null = null
-
-  /** Calls `changed` when a server a connected phone read has new agent rows, so phones need not poll them. */
-  publishRowChanges(changed: (hostId: `runtime:${string}`) => void): () => void {
-    const announcer = new RelayHostRowsAnnouncer(relayHostRowsSources(this.options.hosts), changed)
-    this.rowsAnnouncer = announcer
-    return () => announcer.dispose()
-  }
-
-  /** `by` is the phone connection reading, so the server stays watched for it. */
-  async worktrees(hostId: string, by?: RelayPhoneReader): Promise<MobileRelayHostWorktreesResult> {
+  async worktrees(hostId: string): Promise<MobileRelayHostWorktreesResult> {
     const parsed = parseExecutionHostId(hostId)
     // Re-pairing since status publication must fetch under the new identity.
     await this.options.serverRows.sync()
@@ -239,12 +222,10 @@ export class MobileRelayHostCatalog {
       return { worktrees: null }
     }
     if (host.health === 'available') {
-      this.rowsAnnouncer?.hold(host, by)
       await withinFetchBound(
         this.options.serverRows.refresh(host.environmentId),
         SERVER_FETCH_TIMEOUT_MS
       )
-      this.rowsAnnouncer?.refreshed(host.environmentId)
     }
     const { environments, statusByEnvironmentId } = await this.options.hosts.list()
     const current = environments.find((environment) => environment.id === host.environmentId)

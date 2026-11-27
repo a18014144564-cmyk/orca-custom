@@ -143,7 +143,7 @@ function DownloadProgress({ download }: { download: ShellOverlayDownload }) {
       />
       <Text style={styles.caption}>
         {t('newWorkspace.loadingDrawer.downloadProgress', 'Downloading… {{progress}}', {
-          progress: downloadedMegabytesCaption(download.receivedBytes, download.totalBytes, t)
+          progress: downloadedMegabytesCaption(download.receivedBytes, download.totalBytes)
         })}
       </Text>
     </>

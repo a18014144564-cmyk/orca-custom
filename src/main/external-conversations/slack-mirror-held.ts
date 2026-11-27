@@ -28,9 +28,7 @@ const HeldTurnEnd = z.object({
   origin: z.enum(CONNECTOR_TURN_ORIGINS).optional(),
   failure: ConnectorFailure.optional(),
   links: z.array(ConnectorWorkLink).optional(),
-  mirror: z.literal(true).optional(),
-  // Whom the turn acts for, decided when it ended: kept across the hold, never decided again.
-  turnFor: z.enum(['owner', 'someone_else', 'none']).optional()
+  mirror: z.literal(true).optional()
 })
 
 /** The owner's posts a reply still waits for: those posting or failed. */

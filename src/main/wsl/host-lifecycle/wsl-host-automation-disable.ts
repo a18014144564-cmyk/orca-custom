@@ -19,7 +19,7 @@ export class WslHostAutomationsLeftOffError extends Error {
   }
 }
 
-/** Each one's state on the host, the user's latest choice; one deleted there has no entry. */
+/** Each one's state on the host, the user's latest choice; one deleted there reads as off. */
 export async function readWslHostAutomationStates(
   userDataPath: string,
   environmentId: string,
@@ -36,7 +36,7 @@ export async function readWslHostAutomationStates(
       if (!shown.error.message.includes(AUTOMATION_NOT_FOUND)) {
         throw new Error(`wsl_move_automation_read_failed:${shown.error.message}`)
       }
-      // Absent, not off: undo then gives the copy here its state from before the move.
+      states[id] = false
       continue
     }
     states[id] = ShownAutomationSchema.parse(shown.result).automation.enabled
@@ -51,13 +51,12 @@ export async function readWslHostAutomationStates(
 export async function disableWslHostAutomations(
   userDataPath: string,
   environmentId: string,
-  automationIds: readonly string[],
-  signal?: AbortSignal
+  automationIds: readonly string[]
 ): Promise<string[]> {
   if (automationIds.length === 0) {
     return []
   }
-  const request = await openWslHostAutomationApi(userDataPath, environmentId, signal)
+  const request = await openWslHostAutomationApi(userDataPath, environmentId)
   const turnedOff: string[] = []
   try {
     for (const id of automationIds) {
@@ -80,13 +79,12 @@ export async function disableWslHostAutomations(
 export async function restoreWslHostAutomations(
   userDataPath: string,
   environmentId: string,
-  automationIds: readonly string[],
-  signal?: AbortSignal
+  automationIds: readonly string[]
 ): Promise<void> {
   if (automationIds.length === 0) {
     return
   }
-  const request = await openWslHostAutomationApi(userDataPath, environmentId, signal)
+  const request = await openWslHostAutomationApi(userDataPath, environmentId)
   const leftOff = await turnOnEach(request, automationIds)
   if (leftOff.length > 0) {
     throw new WslHostAutomationsLeftOffError('wsl_move_automation_enable_failed', leftOff)

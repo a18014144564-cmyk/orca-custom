@@ -95,9 +95,6 @@ const {
 const {
   buildMacShipItScheduling
 } = require('./scripts/desktop-distribution/macos/macos-shipit-scheduling.cjs')
-const {
-  packageWindowsWerHelper
-} = require('./scripts/desktop-distribution/windows/package-windows-wer-helper.cjs')
 
 const {
   buildMacNativeAddon
@@ -451,9 +448,6 @@ module.exports = {
     )
   },
   afterPack: async (context) => {
-    if (context.electronPlatformName === 'win32') {
-      packageWindowsWerHelper(context.appOutDir, context.packager.appInfo.productFilename)
-    }
     const resourcesDir =
       context.electronPlatformName === 'darwin'
         ? join(

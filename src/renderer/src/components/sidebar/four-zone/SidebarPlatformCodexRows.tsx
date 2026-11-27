@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Folder, FolderInput, FolderOpen, GitBranch, Pencil, RotateCcw, SquarePen } from 'lucide-react'
+import { Folder, FolderInput, FolderOpen, GitBranch, Pencil, RotateCcw, SquarePen, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/class-names'
 import {
   ContextMenu,
@@ -61,7 +61,8 @@ export function CodexProjectRowItem({
   onCreateWorkspace,
   onRenameProject,
   onMoveThread,
-  onResetThreadMove
+  onResetThreadMove,
+  onDismissArchivedThread
 }: {
   project: CodexProjectRow
   allProjects: readonly CodexProjectRow[]
@@ -75,6 +76,7 @@ export function CodexProjectRowItem({
   onRenameProject: (project: CodexProjectRow, nextName: string) => void | Promise<void>
   onMoveThread: (threadKey: string, targetProjectKey: string) => void
   onResetThreadMove: (threadKey: string) => void
+  onDismissArchivedThread: (threadKey: string) => void
 }): React.JSX.Element {
   const [showAllThreads, setShowAllThreads] = useState(false)
   const [renaming, setRenaming] = useState(false)
@@ -89,42 +91,24 @@ export function CodexProjectRowItem({
     }
   }, [renaming])
 
-  const beginRename = () => {
-    setDraftName(project.name)
-    setRenaming(true)
-  }
-
+  const beginRename = () => { setDraftName(project.name); setRenaming(true) }
   const commitRename = () => {
     setRenaming(false)
     const trimmed = draftName.trim()
-    if (trimmed && trimmed !== project.name) {
-      void onRenameProject(project, trimmed)
-    }
+    if (trimmed && trimmed !== project.name) { void onRenameProject(project, trimmed) }
   }
+  const cancelRename = () => { setRenaming(false); setDraftName(project.name) }
 
-  const cancelRename = () => {
-    setRenaming(false)
-    setDraftName(project.name)
-  }
-
-  const filteredThreads = onlyActive
-    ? project.threads.filter(isLiveCodexThread)
-    : project.threads
+  const filteredThreads = onlyActive ? project.threads.filter(isLiveCodexThread) : project.threads
   const threadWorktreeIds = new Set(filteredThreads.map((t) => t.worktreeId))
   const extraWorktrees =
     project.worktrees.length > 1
-      ? project.worktrees.filter(
-          (wt) =>
-            !threadWorktreeIds.has(wt.id) &&
-            (!onlyActive || wt.statusTone !== 'idle' || wt.isActive)
-        )
+      ? project.worktrees.filter((wt) => !threadWorktreeIds.has(wt.id) && (!onlyActive || wt.statusTone !== 'idle' || wt.isActive))
       : []
 
   const hasChildren = filteredThreads.length > 0 || extraWorktrees.length > 0
   const childrenVisible = hasChildren && isExpanded
-  const visibleThreads = showAllThreads
-    ? filteredThreads
-    : filteredThreads.slice(0, INITIAL_PROJECT_THREADS)
+  const visibleThreads = showAllThreads ? filteredThreads : filteredThreads.slice(0, INITIAL_PROJECT_THREADS)
   const hiddenThreadCount = filteredThreads.length - visibleThreads.length
 
   const hasActiveChild =
@@ -324,6 +308,18 @@ export function CodexProjectRowItem({
                       <ContextMenuItem onSelect={() => onResetThreadMove(thread.key)}>
                         <RotateCcw className="mr-2 size-3.5" />
                         移回原项目
+                      </ContextMenuItem>
+                    </>
+                  ) : null}
+                  {thread.isArchived ? (
+                    <>
+                      <ContextMenuSeparator />
+                      <ContextMenuItem
+                        variant="destructive"
+                        onSelect={() => onDismissArchivedThread(thread.key)}
+                      >
+                        <Trash2 className="mr-2 size-3.5" />
+                        从左侧列表移除
                       </ContextMenuItem>
                     </>
                   ) : null}

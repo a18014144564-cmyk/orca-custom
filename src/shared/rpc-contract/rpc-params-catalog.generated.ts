@@ -112,6 +112,7 @@ import {
 } from './accounts/usage-credentials-params'
 import {
   AgentActivityClearParams,
+  AgentActivityOrchestrationParams,
   AgentActivitySetReadParams
 } from './agent-activity/agent-activity-params'
 import { AgentListParams, AgentReadParams, AgentShowParams } from './agent-conversation-params'
@@ -269,7 +270,9 @@ import { ExtensionList, ExtensionReload } from './browser/browser-extension-para
 import { DropFiles, MouseClick } from './browser/browser-extras-params'
 import {
   GrabAwait,
+  GrabCancel,
   GrabCaptureSelection,
+  GrabPickedPresent,
   GrabSetMode,
   GrabViewportBridge
 } from './browser/browser-grab-params'
@@ -1176,7 +1179,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agent.read': AgentReadParams,
   'agent.show': AgentShowParams,
   'agentActivity.clear': AgentActivityClearParams,
-  'agentActivity.orchestration': null,
+  'agentActivity.orchestration': AgentActivityOrchestrationParams,
   'agentActivity.setRead': AgentActivitySetReadParams,
   'agentCliUpdate.check': AgentCliUpdateCheckParams,
   'agentCliUpdate.run': AgentCliUpdateRunParams,
@@ -1457,9 +1460,10 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.get': Get,
   'browser.goto': Goto,
   'browser.grab.await': GrabAwait,
-  'browser.grab.cancel': BrowserTarget,
+  'browser.grab.cancel': GrabCancel,
   'browser.grab.captureSelection': GrabCaptureSelection,
   'browser.grab.extractHover': BrowserTarget,
+  'browser.grab.pickedPresent': GrabPickedPresent,
   'browser.grab.setMode': GrabSetMode,
   'browser.grab.viewportBridge': GrabViewportBridge,
   'browser.grab.watch': BrowserTarget,

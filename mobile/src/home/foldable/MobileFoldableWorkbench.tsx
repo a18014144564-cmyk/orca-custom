@@ -74,8 +74,7 @@ export function MobileFoldableWorkbench(props: {
         hostId: firstActive.hostId,
         worktreeId: firstActive.entry.worktreeId,
         name: firstActive.entry.workspaceName || firstActive.title,
-        paneKey: firstActive.entry.agent.paneKey,
-        executionHost: firstActive.entry.executionHost?.id
+        paneKey: firstActive.entry.agent.paneKey
       })
     }
   }, [data.activeAgents, data.agentsNeedingYou, onChangeStageTarget, stageTarget])
@@ -158,8 +157,7 @@ export function MobileFoldableWorkbench(props: {
         hostId: row.hostId,
         worktreeId: row.entry.worktreeId,
         name: row.entry.workspaceName || row.title,
-        paneKey: row.entry.agent.paneKey,
-        executionHost: row.entry.executionHost?.id
+        paneKey: row.entry.agent.paneKey
       })
       if (splitActive) {
         setMidCollapsed(true)

@@ -1,7 +1,6 @@
 import { isFolderRepo } from '../../shared/repository/repo-kind'
 import type { ProjectLaunchContext } from '../../shared/rpc-contract/preflight/preflight-params'
 import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
-import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import { WORKSPACE_ON_OTHER_RUNTIME } from '../../shared/remote-runtime/protocol/preflight-runtime-capabilities'
 import { refreshAtRestCommandContext } from '../native-chat/agent-session-wire/options/at-rest-command-context'
 import { captureHostShellEnvironment } from '../runtime/agent-session/environment/structured-agent-shell-environment'
@@ -199,8 +198,7 @@ export async function refreshAgentsOnHost(
 /** A prospective workspace uses the create route's resolved repo, never a client host guess. */
 export async function detectProjectLaunchContext(
   store: WorkspaceAgentDetectionStore,
-  repo: Repo,
-  onlyTuiAgent?: TuiAgent
+  repo: Repo
 ): Promise<ProjectLaunchContext> {
   const host = getRepoExecutionHostId(repo)
   const ssh = getSshTargetIdForExecutionHost(host)
@@ -211,10 +209,9 @@ export async function detectProjectLaunchContext(
   if (!ssh && !projectRuntime) {
     throw new Error('worktree_execution_host_unresolved')
   }
-  const overrides = agentCommandOverrideDetectionOptions(store.getSettings?.().agentCmdOverrides)
   const agents = await detectAgentsOnHost(
     ssh ? { kind: 'ssh', connectionId: ssh } : { kind: 'local', context: { projectRuntime } },
-    onlyTuiAgent ? { ...overrides, onlyTuiAgent } : overrides
+    agentCommandOverrideDetectionOptions(store.getSettings?.().agentCmdOverrides)
   )
   return {
     agents: agents.filter(isTuiAgent),

@@ -144,8 +144,7 @@ export function loadInitialWebSessionTabs({
             freshSnapshots,
             environmentId,
             undefined,
-            changedAgentPaneKeys,
-            { requestReceivedFrame }
+            changedAgentPaneKeys
           ),
         {
           frames: applicable.map((snapshot, index) => ({

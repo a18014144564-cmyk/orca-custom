@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown, ChevronRight, Clock, FolderTree, LayoutList, Plus, SlidersHorizontal } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
@@ -25,6 +25,12 @@ import { collectExcludedBotSessionIds } from './sidebar-codex-bot-filter'
 import { useSidebarHostScopeOptions } from '../worktree-list/controls/use-sidebar-host-scope-options'
 import { groupCodexProjectsByHost, resolveCodexZoneHostMeta } from './sidebar-codex-host-groups'
 import { buildCodexSidebarModel, type CodexProjectRow, type CodexRecentRow } from './sidebar-codex-model'
+import {
+  dismissCodexArchivedThread,
+  rememberLiveCodexThreads,
+  useCodexArchivedThreads
+} from './sidebar-codex-thread-archive'
+import { reopenArchivedCodexThread } from './sidebar-codex-reopen'
 import {
   moveCodexThreadToProject,
   resetCodexThreadProject,
@@ -83,6 +89,7 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
   const [showAllRecent, setShowAllRecent] = useState(false)
   const [selectedPaneKey, setSelectedPaneKey] = useState<string | null>(null)
   const threadProjectOverrides = useCodexThreadProjectMap()
+  const archivedThreads = useCodexArchivedThreads()
 
   const { hostOptions } = useSidebarHostScopeOptions()
   const hostMeta = useMemo(
@@ -129,28 +136,20 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
         activeWorktreeId,
         selectedPaneKey,
         onlyActiveRecent: onlyActive,
-        threadProjectOverrides
+        threadProjectOverrides,
+        archivedThreads
       }),
     [
-      repos,
-      worktreesByRepo,
-      folderWorkspaces,
-      botHomeOwners,
-      botOwnedWorktreeIdentities,
-      excludedBotSessionIds,
-      worktreeLineageById,
-      hostMeta.canonicalHostById,
-      allThreads,
-      tabsByWorktree,
-      browserTabsByWorktree,
-      hostIds,
-      defaultHostId,
-      activeWorktreeId,
-      selectedPaneKey,
-      onlyActive,
-      threadProjectOverrides
+      repos, worktreesByRepo, folderWorkspaces, botHomeOwners, botOwnedWorktreeIdentities,
+      excludedBotSessionIds, worktreeLineageById, hostMeta.canonicalHostById, allThreads,
+      tabsByWorktree, browserTabsByWorktree, hostIds, defaultHostId, activeWorktreeId,
+      selectedPaneKey, onlyActive, threadProjectOverrides, archivedThreads
     ]
   )
+
+  useEffect(() => {
+    rememberLiveCodexThreads(model.recentItems)
+  }, [model.recentItems])
 
   const visibleProjects = useMemo(
     () => (onlyActive ? model.projects.filter(projectMatchesActiveFilter) : model.projects),
@@ -235,6 +234,10 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
         onWorktreeClick?.()
         return
       }
+      if (reopenArchivedCodexThread(item)) {
+        onWorktreeClick?.()
+        return
+      }
       handleActivateWorktree(item.worktreeId, item.hostId)
     },
     [handleActivateWorktree, onWorktreeClick, threadActions]
@@ -259,6 +262,7 @@ export const SidebarPlatformCodexPane = React.memo(function SidebarPlatformCodex
       onRenameProject={handleRenameProject}
       onMoveThread={moveCodexThreadToProject}
       onResetThreadMove={resetCodexThreadProject}
+      onDismissArchivedThread={dismissCodexArchivedThread}
     />
   )
 

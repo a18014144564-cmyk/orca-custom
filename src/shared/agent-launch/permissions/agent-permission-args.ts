@@ -84,7 +84,7 @@ const CODEX_VALUES = [
   '--disable'
 ]
 const MODEL_VALUES = ['--model', '--effort']
-export const CLAUDE_VARIADIC = [
+const CLAUDE_VARIADIC = [
   '--tools',
   '--allowedTools',
   '--allowed-tools',

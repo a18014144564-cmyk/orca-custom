@@ -26,7 +26,6 @@ import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/h
 import { nativeChatRestartStillStarting } from '@/components/native-chat-recovery/offers/native-chat-restart-runtimes'
 import { showChatOpenUnavailable, type ChatOpenUnavailable } from './chat-open-failure-toast'
 import { parseOrcaSessionAddress } from '../../../../../shared/agent-session/identity/orca-session-address'
-import { cancelPendingBotThreadOpen } from './bot-thread-open-lifecycle'
 
 type StructuredSessionActivationDeps = StructuredSessionOpenAdapterDeps & {
   unavailable: (agent?: string, context?: ChatOpenUnavailable) => void
@@ -75,7 +74,7 @@ export const structuredSessionOpenFeedback: StructuredSessionOpenFeedback = {
 /** Read only structuredSession so history clicks and drag payloads follow the same reveal path. */
 export async function activateAiVaultStructuredSession(
   session: Pick<AiVaultSession, 'structuredSession'> & { agent?: string },
-  options?: { deps: StructuredSessionActivationDeps; retry: () => Promise<unknown> },
+  deps?: StructuredSessionActivationDeps,
   target?: RuntimeClientTarget
 ): Promise<boolean> {
   if (!session.structuredSession) {
@@ -84,19 +83,12 @@ export async function activateAiVaultStructuredSession(
   // A group member's session reopens the room it talks in, not the member's own chat.
   const room = botGroupRoomOfRow(readBotGroups(), session)
   if (room) {
-    if (!options?.deps.signal) {
-      cancelPendingBotThreadOpen()
-    }
     await openBotGroupRoom(room.group, room.roomId, room.label)
     return true
   }
   await openDesktopStructuredSession(
     { kind: 'history', structuredSession: session.structuredSession, agent: session.agent },
-    {
-      target,
-      deps: options?.deps,
-      retry: options?.retry ?? (() => activateAiVaultStructuredSession(session, undefined, target))
-    }
+    { target, deps, retry: () => activateAiVaultStructuredSession(session, deps, target) }
   )
   return true
 }
@@ -114,9 +106,6 @@ export function openDesktopStructuredSession(
   options: DesktopStructuredSessionOpenOptions = {}
 ): Promise<StructuredSessionOpenResult> {
   const { target, deps, locate, feedback, retry } = options
-  if (!deps?.signal) {
-    cancelPendingBotThreadOpen()
-  }
   // Read when the open starts: the selection may move before it settles.
   const pairedHostId = openingPairedHostId(source, target)
   const retryOpen = retry === 'open' ? () => openDesktopStructuredSession(source, options) : retry

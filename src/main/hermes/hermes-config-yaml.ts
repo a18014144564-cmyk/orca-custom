@@ -13,8 +13,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function asStringArray(value: unknown): string[] | null {
-  // Hermes reads a key with no value (YAML null) as unset, the same as a missing key.
-  if (value === undefined || value === null) {
+  if (value === undefined) {
     return []
   }
   if (!Array.isArray(value) || value.some((item) => typeof item !== 'string')) {
@@ -70,7 +69,7 @@ export function disablePlugin(config: HermesConfig): HermesConfig {
   }
   const plugins = { ...next.plugins }
   const enabled = asStringArray(plugins.enabled)
-  if (enabled !== null && Array.isArray(plugins.enabled)) {
+  if (enabled !== null && plugins.enabled !== undefined) {
     plugins.enabled = enabled.filter((name) => name !== HERMES_PLUGIN_NAME)
   }
   next.plugins = plugins
@@ -81,7 +80,7 @@ function updatePassthrough(
   config: HermesConfig,
   update: (names: string[]) => string[]
 ): HermesConfig {
-  const terminal = config.terminal ?? {}
+  const terminal = config.terminal === undefined ? {} : config.terminal
   // Hermes ignores a malformed section; leave it for the user rather than fail the plugin install.
   const names = isRecord(terminal) ? asStringArray(terminal.client_env_passthrough) : null
   if (names === null) {

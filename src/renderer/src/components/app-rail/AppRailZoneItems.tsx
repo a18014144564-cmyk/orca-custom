@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React from 'react'
 import {
   ArrowDown,
   ArrowUp,
@@ -10,7 +10,6 @@ import {
   RotateCcw,
   Users
 } from 'lucide-react'
-import { cn } from '@/lib/class-names'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -84,7 +83,7 @@ const ZONE_RAIL_SPEC_BY_MODE: Record<SidebarZoneMode, ZoneRailItemSpec> = {
   all: {
     itemId: 'workspaces',
     zone: 'all',
-    label: '全部（经典）',
+    label: '全部',
     renderIcon: () => (
       <Layers size={APP_RAIL_ICON_SIZE} strokeWidth={APP_RAIL_ICON_STROKE_WIDTH} aria-hidden />
     )
@@ -132,8 +131,6 @@ export function AppRailZoneButtons({
   tabStopItem: AppRailItemId
   onSelectZone: (zone: SidebarZoneMode) => void
 }): React.JSX.Element {
-  const [draggingZone, setDraggingZone] = useState<SidebarZoneMode | null>(null)
-  const [dropTargetZone, setDropTargetZone] = useState<SidebarZoneMode | null>(null)
   const items = getOrderedZoneRailItems(botsEnabled, zoneOrder)
   const isDefaultOrder = DEFAULT_SIDEBAR_ZONE_ORDER.every(
     (mode, index) => zoneOrder[index] === mode
@@ -143,87 +140,32 @@ export function AppRailZoneButtons({
     <>
       {items.map((item, visibleIndex) => {
         const active = workspacesActive && zoneMode === item.zone
-        const label = item.zone === 'all' ? `${workspacesLabel}（经典全部）` : item.label
+        const label = item.zone === 'all' ? `${workspacesLabel}（全部）` : item.label
         const isFirstVisible = visibleIndex === 0
         const isLastVisible = visibleIndex === items.length - 1
-        const showDropIndicator =
-          draggingZone !== null && dropTargetZone === item.zone && draggingZone !== item.zone
-        const dragIndex = draggingZone ? items.findIndex((entry) => entry.zone === draggingZone) : -1
-        const dropBelow = dragIndex !== -1 && dragIndex < visibleIndex
 
         return (
           <ContextMenu key={item.itemId}>
-            <div
-              className="relative flex flex-col items-center"
-              onDragOver={(event) => {
-                if (!draggingZone || draggingZone === item.zone) {
-                  return
-                }
-                event.preventDefault()
-                event.dataTransfer.dropEffect = 'move'
-                if (dropTargetZone !== item.zone) {
-                  setDropTargetZone(item.zone)
-                }
-              }}
-              onDragLeave={() => {
-                if (dropTargetZone === item.zone) {
-                  setDropTargetZone(null)
-                }
-              }}
-              onDrop={(event) => {
-                event.preventDefault()
-                const source = draggingZone
-                setDraggingZone(null)
-                setDropTargetZone(null)
-                if (source && source !== item.zone) {
-                  setSidebarZoneOrder(moveSidebarZoneInOrder(zoneOrder, source, item.zone))
-                }
-              }}
-            >
-              {showDropIndicator && !dropBelow ? (
-                <div
-                  aria-hidden
-                  className="pointer-events-none absolute -top-1.5 h-0.5 w-5 rounded-full bg-primary"
-                />
-              ) : null}
-              <ContextMenuTrigger asChild>
-                <span className="inline-flex">
-                  <RailItem tooltip={`${label}（可拖动或右键排序）`}>
-                    <AppRailButton
-                      itemId={item.itemId}
-                      icon={item.renderIcon()}
-                      label={item.zone === 'all' ? workspacesLabel : item.label}
-                      active={active}
-                      aria-expanded={active && listShowsWorkspaces ? listVisible : undefined}
-                      aria-controls={
-                        listShowsWorkspaces && listRegionPresent
-                          ? WORKSPACE_LIST_REGION_ID
-                          : undefined
-                      }
-                      tabStop={tabStopItem === item.itemId}
-                      draggable
-                      className={cn(draggingZone === item.zone && 'opacity-45')}
-                      onDragStart={(event) => {
-                        setDraggingZone(item.zone)
-                        event.dataTransfer.effectAllowed = 'move'
-                        event.dataTransfer.setData('text/plain', item.zone)
-                      }}
-                      onDragEnd={() => {
-                        setDraggingZone(null)
-                        setDropTargetZone(null)
-                      }}
-                      onClick={() => onSelectZone(item.zone)}
-                    />
-                  </RailItem>
-                </span>
-              </ContextMenuTrigger>
-              {showDropIndicator && dropBelow ? (
-                <div
-                  aria-hidden
-                  className="pointer-events-none absolute -bottom-1.5 h-0.5 w-5 rounded-full bg-primary"
-                />
-              ) : null}
-            </div>
+            <ContextMenuTrigger asChild>
+              <span className="inline-flex">
+                <RailItem tooltip={`${label}（右键可调整顺序）`}>
+                  <AppRailButton
+                    itemId={item.itemId}
+                    icon={item.renderIcon()}
+                    label={item.zone === 'all' ? workspacesLabel : item.label}
+                    active={active}
+                    aria-expanded={active && listShowsWorkspaces ? listVisible : undefined}
+                    aria-controls={
+                      listShowsWorkspaces && listRegionPresent
+                        ? WORKSPACE_LIST_REGION_ID
+                        : undefined
+                    }
+                    tabStop={tabStopItem === item.itemId}
+                    onClick={() => onSelectZone(item.zone)}
+                  />
+                </RailItem>
+              </span>
+            </ContextMenuTrigger>
             <ContextMenuContent className="w-40">
               <ContextMenuItem
                 disabled={isFirstVisible}

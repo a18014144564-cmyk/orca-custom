@@ -43,7 +43,7 @@ import {
   storageReadParamsSchema,
   type BridgeNativeVerb
 } from './bridge/native-capabilities/bridge-native-verbs'
-import { ShellPageCover } from './presentation/ShellWaitingFrame'
+import { SHELL_OPENING_LABEL, ShellPageCover } from './presentation/ShellWaitingFrame'
 import { ShellStateScreen } from './presentation/ShellStateScreen'
 import {
   useReportedShellOverlayLoad,
@@ -426,7 +426,9 @@ export function MobileWebShellScreen({
           }
         }}
       />
-      {overlay ? null : <ShellPageCover visible={pageFrame === 'unpainted'} />}
+      {overlay ? null : (
+        <ShellPageCover label={SHELL_OPENING_LABEL} visible={pageFrame === 'unpainted'} />
+      )}
       <ShellDevFacts state={state} droppedBinaryFrames={droppedBinaryFrames} />
     </View>
   )

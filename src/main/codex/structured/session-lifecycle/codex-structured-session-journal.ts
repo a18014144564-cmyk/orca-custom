@@ -8,10 +8,7 @@ import type {
   CodexAcquisitionAttempt,
   CodexStructuredSessionAdapterDeps
 } from './codex-structured-session-state'
-import {
-  codexAcceptedSend,
-  codexEchoVia
-} from '../journal/codex-structured-journal-translation-turns'
+import { codexAcceptedSend } from '../journal/codex-structured-journal-translation-turns'
 
 export function createCodexSessionJournalTranslator(input: {
   sink: StructuredAgentSessionEventSink | undefined
@@ -44,7 +41,7 @@ export function createCodexSessionJournalTranslator(input: {
         clearPromptTurn: (threadId, turnId) => prompts.clearTurn(threadId, turnId),
         onUserMessageEcho: (clientMessageId, providerIdentity) => {
           // Read before settling: settling forgets how the send was written.
-          const via = codexEchoVia(dispatchEchoes, clientMessageId, providerIdentity)
+          const via = dispatchEchoes.sentVia(clientMessageId)
           // Duplicate exact echoes retry receipt persistence while the send remains unsettled.
           dispatchEchoes.settle(clientMessageId)
           deps.onDispatchSettledLate?.({

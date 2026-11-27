@@ -18,7 +18,6 @@ import {
   readActiveProfileId,
   readPersistedHttp1CompatibilityMode
 } from './network-compatibility/http1-compatibility-profile-state'
-import { declineBackgroundClientCertificates } from './network-compatibility/background-client-certificate-guard'
 
 const DEV_PARENT_SHUTDOWN_GRACE_MS = 3000
 const HTTP1_COMPATIBILITY_ENV_VAR = 'ORCA_DISABLE_HTTP2'
@@ -74,7 +73,6 @@ export function configureElectronNetworkCompatibility(
   options: NetworkCompatibilityOptions = {}
 ): void {
   installBestEffortSocketTypeOfService()
-  declineBackgroundClientCertificates(app)
   if (!shouldDisableHttp2ForElectronNetworking(options)) {
     return
   }

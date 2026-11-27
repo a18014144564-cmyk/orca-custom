@@ -65,7 +65,6 @@ export type SessionTabsPublicationEpochHistory = RetiredValueHistory
 
 export type WebSessionTabsSnapshotApplyOptions = {
   contentScope?: 'all' | 'agent-session'
-  requestReceivedFrame?: number
   preserveLocalLayout?: boolean
   terminalPtyMode?: 'local' | 'remote'
   reconcileBrowserPage?: {

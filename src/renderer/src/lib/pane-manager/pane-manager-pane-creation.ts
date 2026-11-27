@@ -32,25 +32,11 @@ export function activateManagedPane(
   applyPaneOpacity(host.panes.values(), host.getActivePaneId(), host.getStyleOptions())
 
   if (opts?.focus !== false) {
-    if (opts?.interaction === 'hover' && host.options.withHoverFocus) {
-      host.options.withHoverFocus(() => focusPanePreservingOverlays(pane))
-    } else {
-      focusPanePreservingOverlays(pane)
-    }
+    focusPanePreservingOverlays(pane)
   }
 
   if (changed) {
-    host.options.onActivePaneChange?.(toPublicPane(pane), opts?.interaction)
-  }
-  if (
-    host.options.onPaneActivation &&
-    (changed ||
-      opts?.interaction === 'user' ||
-      (opts?.interaction === 'hover' &&
-        pane.container.contains(pane.container.ownerDocument.activeElement))) &&
-    host.getActivePaneId() === pane.id
-  ) {
-    host.options.onPaneActivation(pane.leafId, opts?.interaction, changed)
+    host.options.onActivePaneChange?.(toPublicPane(pane))
   }
 }
 
@@ -97,8 +83,7 @@ export function createManagedPaneInternal(
     (paneId, options) => {
       if (!host.isDestroyed()) {
         host.setActivePane(paneId, {
-          focus: options?.focusTerminal !== false,
-          interaction: 'user'
+          focus: options?.focusTerminal !== false
         })
       }
     },
@@ -144,6 +129,6 @@ function handleManagedPaneMouseEnter(
       managerDestroyed: host.isDestroyed()
     })
   ) {
-    host.setActivePane(paneId, { focus: true, interaction: 'hover' })
+    host.setActivePane(paneId, { focus: true })
   }
 }

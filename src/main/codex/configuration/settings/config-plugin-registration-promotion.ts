@@ -7,7 +7,6 @@ import {
   normalizeCodexRegistrationValue,
   parseCodexRegistrationTimestamp,
   readCodexRegistrationEntries,
-  readCodexRegistrationRootsDefinedOutsideTables,
   type CodexRegistrationEntry,
   type CodexRegistrationRoot
 } from '../toml/config-toml-plugin-registration-tables'
@@ -41,16 +40,10 @@ export function planCodexRegistrationPromotion(
     plugins: []
   }
   const fields: CodexRegistrationPromotion[] = []
-  // A `[root.name]` table beside an inline, dotted or array definition would redefine a key.
-  const definedOutsideTables = readCodexRegistrationRootsDefinedOutsideTables(systemConfig)
   for (const entry of runtimeEntries.values()) {
     const systemEntry = systemEntries.get(entry.key)
     if (!systemEntry) {
-      if (
-        !mirroredRegistrations.has(entry.key) &&
-        !definedOutsideTables.has(entry.key) &&
-        !definedOutsideTables.has(entry.root)
-      ) {
+      if (!mirroredRegistrations.has(entry.key)) {
         appends[entry.root].push({ kind: 'append', key: entry.key, block: entry.block })
       }
       continue

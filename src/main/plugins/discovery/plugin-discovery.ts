@@ -31,7 +31,6 @@ import { readPluginManifestText } from '../artifacts/plugin-manifest-file'
 import { readPluginCurrentPointer } from '../installation/plugin-current-pointer'
 import { readPluginLockfile } from '../installation/plugin-install-lockfile-store'
 import { hashPluginTree } from '../artifacts/plugin-content-hash'
-import { hashDeclarativePluginContent } from '../artifacts/plugin-declarative-content-integrity'
 import { pluginDevChangeCount } from '../development/plugin-dev-revision'
 import {
   getRequiredTeamPlugins,
@@ -50,7 +49,7 @@ export type ValidDiscoveredPlugin = {
   manifest: PluginManifest
   /** Fingerprint of the capabilities and trusted-worker execution tier. */
   consentFingerprint: string
-  /** Content identity included in consent for declarative packs (see hashDeclarativePluginContent). */
+  /** Immutable tree identity included in consent for declarative packs. */
   consentContentHash?: string | null
   /** Null for mutable dev trees. */
   contentHash: string | null
@@ -158,15 +157,17 @@ async function readManifestDir(
   if (installedContentHash && requiresPluginContentApproval(manifest)) {
     consentContentIdentity = installedContentHash
   }
-  if (isDev && hasDeclarativePluginContributions(manifest)) {
-    const reviewed = await hashDeclarativePluginContent(rootDir, manifest, true)
-    if (!reviewed.ok) {
-      return { pluginKey, rootDir, error: reviewed.error, isDev }
-    }
-    consentContentIdentity = reviewed.hash
-  }
+  // Why dev trees bind only instructions: dev code is the author's working copy, and
+  // binding it would re-prompt on every save.
   let devRevision: string | null = null
-  if (isDev && manifest.main) {
+  if (isDev && hasDeclarativePluginContributions(manifest)) {
+    const treeHash = await hashPluginTree(rootDir, { devFolder: true })
+    if (!treeHash.ok) {
+      return { pluginKey, rootDir, error: treeHash.error, isDev }
+    }
+    consentContentIdentity = treeHash.hash
+    devRevision = treeHash.hash
+  } else if (isDev && manifest.main) {
     const treeHash = await hashPluginTree(rootDir, { devFolder: true })
     // Why not an error: an oversized tree still runs; only edit-triggered restarts are lost.
     devRevision = treeHash.ok ? treeHash.hash : null

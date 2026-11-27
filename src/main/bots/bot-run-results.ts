@@ -312,8 +312,7 @@ export function runtimeBotRunResults(runtime: OrcaRuntimeService): BotRunResults
             runtime
               .getConnectorCloud()
               ?.reply({ replyId, conversation, turnId: Date.now(), text, turnFor }) ?? null,
-          // The host delivers the run's own result: no request to verify.
-          turnForOf: (sessionId) => botTurnFor(runtime, sessionId, 'host'),
+          turnForOf: (sessionId) => botTurnFor(runtime, sessionId, undefined),
           ...runtimeBotOwnerNotice(runtime)
         },
         result

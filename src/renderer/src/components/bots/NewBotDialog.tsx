@@ -3,6 +3,7 @@
 import React, { useId, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { toast } from 'sonner'
+import { LayoutTemplate } from 'lucide-react'
 import {
   AddRemoteHostDialog,
   type AddRemoteHostMode
@@ -12,6 +13,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
@@ -22,8 +24,7 @@ import { createBot, useHostBots } from '@/lib/bot-catalog'
 import { handleScreenFormSubmitKey } from '@/lib/keyboard/screen-submit-shortcut'
 import { BOT_NAME_MAX_LENGTH, type Bot, type BotAgent } from '../../../../shared/bot-types'
 import { botCreateErrorMessage } from './bot-presentation'
-import { BotRunsOnPicker, useBotAgentFieldPlaceholder } from './BotRunsOnPicker'
-import { NewBotDialogFooter } from './NewBotDialogFooter'
+import { BotRunsOnPicker } from './BotRunsOnPicker'
 import { BotImportNudge } from './BotImportNudge'
 import { openCreatedBot } from './bot-create-open'
 import { NewBotPictureButton } from './NewBotPictureButton'
@@ -39,6 +40,7 @@ import { useBotAgentSetup } from './use-bot-agent-setup'
 import { proposalCreateParams, type BotProposal } from '../../../../shared/bots/bot-proposal'
 import { BOTS_TEMPLATES_RUNTIME_CAPABILITY } from '../../../../shared/bot-runtime-capabilities'
 import { useBotHostHas } from '@/lib/bot-host-status'
+import { Button } from '@/components/ui/button'
 import { DEFAULT_BOT_AVATAR_COLOR } from '../../../../shared/bots/bot-avatar-color'
 import { botTemplate, type BotTemplateSkill } from '../../../../shared/bots/bot-templates'
 import { botTemplateWord } from '../../../../shared/bots/bot-template-text'
@@ -46,6 +48,7 @@ import { NewBotTemplateParts } from './NewBotTemplateParts'
 import type { BotCreateParams } from '../../../../shared/rpc-contract/bots-params'
 import { NewBotProposalFields, NewBotTakesOver } from './NewBotProposalFields'
 import { NewBotPurposeField } from './NewBotPurposeField'
+import { BotCreateButton } from './BotCreateButton'
 import { BARE_HEADING_CLASS, FIELD_ERROR, keyboardNavMarkerHandlers } from './new-bot-bare-fields'
 import { openBotTemplates } from './templates/bot-templates-open'
 import { pictureTintFor } from './avatar-picture-tint'
@@ -66,7 +69,7 @@ import {
   sharedPicturePng,
   type NewBotShareSource
 } from './sharing/new-bot-from-share'
-import { useShareOrigin } from './sharing/NewBotFromShareParts'
+import { NewBotShareBack, useShareOrigin } from './sharing/NewBotFromShareParts'
 
 export function NewBotDialog({
   open,
@@ -138,8 +141,6 @@ export function NewBotDialog({
   const menu = useNewBotAgentMenu(hostId, open)
   // A bot from someone else's link starts on Ask, whatever the owner's chats do.
   const agentSetup = useBotAgentSetup(menu, hostId, initialAgent, fromShare && 'ask')
-  const agentFieldRef = useRef<HTMLDivElement>(null)
-  const agentPlaceholder = useBotAgentFieldPlaceholder(hostChoice, menu.model, menu.choices)
   const [creating, setCreating] = useState(false)
   const createInFlight = useRef(false)
   const [submitted, setSubmitted] = useState(false)
@@ -379,7 +380,6 @@ export function NewBotDialog({
               keptPermission={agentSetup.intent}
               onAddHost={hosts ? undefined : setAddHostMode}
               showSubmitFeedback={submitted}
-              agentFieldRef={agentFieldRef}
             />
             {template ? <NewBotTakesOver worktrees={proposal?.worktrees} /> : null}
             {template ? (
@@ -408,23 +408,27 @@ export function NewBotDialog({
               </div>
             ) : null}
           </div>
-          <NewBotDialogFooter
-            setup={agentSetup.setup}
-            agentPickerShown={!agentPlaceholder}
-            onSetupChange={agentSetup.setSetup}
-            onTemplate={
-              showTemplateLink
-                ? () => {
-                    close()
-                    openBotTemplates()
-                  }
-                : undefined
-            }
-            shareSource={fromShare}
-            creating={creating}
-            hostBusy={hostChoice.busy}
-            agentFieldRef={agentFieldRef}
-          />
+          <DialogFooter className="mt-0 shrink-0">
+            {/* It closes this dialog, so it shows only before anything is typed. */}
+            {showTemplateLink ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  close()
+                  openBotTemplates()
+                }}
+              >
+                <LayoutTemplate aria-hidden />
+                {t('bots.new.fromTemplate', 'Template')}
+              </Button>
+            ) : null}
+            {fromShare ? <NewBotShareBack source={fromShare} disabled={creating} /> : null}
+            <BotCreateButton type="submit" busy={creating} disabled={creating || hostChoice.busy}>
+              {t('bots.new.create', 'Create')}
+            </BotCreateButton>
+          </DialogFooter>
         </form>
       </DialogContent>
       {addHostMode ? (

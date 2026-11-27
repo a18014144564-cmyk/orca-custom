@@ -9,19 +9,17 @@ import { Identifier, SessionId } from './structured-agent-session-identifiers'
 
 const UploadId = Identifier('Invalid upload id', 128)
 
-const AttachmentUploadFile = {
-  name: z.string().min(1).max(1024),
-  byteLength: z
-    .number()
-    .int()
-    .nonnegative()
-    .max(AGENT_SESSION_ATTACHMENT_MAX_BYTES, 'Attachment is too large')
-}
-
-export const AttachmentUploadStartParams = z.union([
-  z.strictObject({ sessionId: SessionId, ...AttachmentUploadFile }),
-  z.strictObject({ item: z.uuid(), ...AttachmentUploadFile })
-])
+export const AttachmentUploadStartParams = z
+  .object({
+    sessionId: SessionId,
+    name: z.string().min(1).max(1024),
+    byteLength: z
+      .number()
+      .int()
+      .nonnegative()
+      .max(AGENT_SESSION_ATTACHMENT_MAX_BYTES, 'Attachment is too large')
+  })
+  .strict()
 
 export const AttachmentUploadAppendParams = z
   .object({

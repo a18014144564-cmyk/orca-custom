@@ -149,11 +149,8 @@ export function buildSettingsNavigationMetadata(
 }
 
 /** `pickedHost`: Settings' own host picker, which can show MCP servers on a host the default isn't. */
-const NO_SETTINGS_NAV_SECTIONS: SettingsNavSection[] = []
-
 export function useSettingsNavigationMetadata(
-  pickedHost?: RuntimeClientTarget,
-  enabled = true
+  pickedHost?: RuntimeClientTarget
 ): SettingsNavSection[] {
   const t = useTranslate()
   // The locale subscription must also invalidate the memo or labels retain the previous language.
@@ -213,34 +210,32 @@ export function useSettingsNavigationMetadata(
 
   return useMemo(
     () =>
-      enabled
-        ? buildSettingsNavigationMetadata(
-            {
-              isMac,
-              isWindows,
-              isLocalWindowsHost,
-              isWindowsTerminalHost,
-              isWebClient,
-              botsEnabled,
-              hostQueuesMessages,
-              typedChatPermissions,
-              managedBrowserCreationEnabled,
-              mobileEmulatorCreationEnabled,
-              showWorkspaceCardLayout,
-              isDev: import.meta.env.DEV,
-              isLinearConnected,
-              mcpServersAvailable,
-              repos,
-              bots,
-              projectGroups,
-              projectGrouping: {
-                projects: projectHostSetupProjection.projects,
-                projectHostSetups: projectHostSetupProjection.setups
-              }
-            },
-            t
-          )
-        : NO_SETTINGS_NAV_SECTIONS,
+      buildSettingsNavigationMetadata(
+        {
+          isMac,
+          isWindows,
+          isLocalWindowsHost,
+          isWindowsTerminalHost,
+          isWebClient,
+          botsEnabled,
+          hostQueuesMessages,
+          typedChatPermissions,
+          managedBrowserCreationEnabled,
+          mobileEmulatorCreationEnabled,
+          showWorkspaceCardLayout,
+          isDev: import.meta.env.DEV,
+          isLinearConnected,
+          mcpServersAvailable,
+          repos,
+          bots,
+          projectGroups,
+          projectGrouping: {
+            projects: projectHostSetupProjection.projects,
+            projectHostSetups: projectHostSetupProjection.setups
+          }
+        },
+        t
+      ),
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() inside buildSettingsNavigationMetadata reads the UI language and catalogs implicitly.
     [
       isMac,
@@ -261,8 +256,7 @@ export function useSettingsNavigationMetadata(
       projectGroups,
       projectHostSetupProjection,
       languageRevision,
-      t,
-      enabled
+      t
     ]
   )
 }

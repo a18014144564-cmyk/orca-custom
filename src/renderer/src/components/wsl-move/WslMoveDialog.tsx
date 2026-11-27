@@ -24,9 +24,12 @@ import { collectWslMoveSleptPaneBindings } from './wsl-move-slept-pane-bindings'
 import { followWslMoveOrchestratorStatus } from './wsl-move-orchestrator-status'
 import { findWorktreeById } from '@/store/github/refresh/worktree-refresh'
 import { getWslDistroFromPath } from '@/runtime/hosts/preflight/local-preflight-context'
-import { wslMoveBlockerProjects, wslMoveProjectRows } from './wsl-move-scope-rows'
+import { wslMoveBlockerProjects, wslMoveCounts, wslMoveProjectRows } from './wsl-move-scope-rows'
 import type { WslMoveCatalog } from './wsl-move-scope-rows'
-import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
 import { adoptWslMoveProgress } from './wsl-move-run-adoption'
 import { closeWslMoveDialog, reloadAfterWslMove } from './wsl-move-dialog-close'
 import { RecoverableRenderErrorBoundary } from '../error-boundaries/RecoverableRenderErrorBoundary'
@@ -47,7 +50,9 @@ function useMoveCatalog(): WslMoveCatalog {
     useShallow((state) => ({
       repos: state.repos,
       folders: selectFolderWorkspaces(state),
-      unifiedTabsByWorktree: state.unifiedTabsByWorktree
+      repoWorktrees: selectWorktreesByRepo(state),
+      unifiedTabsByWorktree: state.unifiedTabsByWorktree,
+      terminalLayoutsByTabId: state.terminalLayoutsByTabId
     }))
   )
 }
@@ -154,12 +159,7 @@ function WslMoveDialog(): React.JSX.Element | null {
           distro={distro}
           rows={rows}
           selected={selected}
-          counts={
-            // Main counts what the move itself would carry; nothing is shown until it answers.
-            preview?.outcome === 'ready' && preview.counts
-              ? { projects: selected.length, ...preview.counts }
-              : null
-          }
+          counts={wslMoveCounts(catalog, selected)}
           preview={preview}
           notMoving={wslMoveNotMovingLines(dialog.distroPreview, nameOf, distro, t)}
           blockers={

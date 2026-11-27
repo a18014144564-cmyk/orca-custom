@@ -18,16 +18,10 @@ import {
   getWorktreeJumpPaletteResultCount
 } from './results/worktree-jump-palette-empty-state'
 
-const RESULT_KEYS = new Set(['Enter', 'ArrowDown', 'ArrowUp', 'Home', 'End', 'PageDown', 'PageUp'])
-
 export function WorktreeJumpPaletteSurface({
-  controller,
-  resultsReady,
-  revealResultsNow
+  controller
 }: {
   controller: WorktreeJumpPaletteController
-  resultsReady: boolean
-  revealResultsNow: () => void
 }): React.JSX.Element {
   const t = useTranslate()
   const selectedTask = controller.taskItems.find(
@@ -76,10 +70,6 @@ export function WorktreeJumpPaletteSurface({
         onValueChange: controller.handleCommandSelectionChange,
         className: 'jump-palette-command bg-transparent',
         onKeyDownCapture: (event: React.KeyboardEvent) => {
-          // Ctrl/Cmd chords include cmdk's Ctrl+N/J/P/K list navigation.
-          if (!resultsReady && (RESULT_KEYS.has(event.key) || event.ctrlKey || event.metaKey)) {
-            revealResultsNow()
-          }
           if (
             selectedTask &&
             event.key === 'Enter' &&
@@ -179,10 +169,9 @@ export function WorktreeJumpPaletteSurface({
         }}
         className="max-h-[min(600px,calc(100vh-14rem))] px-2.5 pb-2.5 pt-2"
       >
-        {/* The opening frame paints only the input; results fill in on the next frame. */}
-        {!resultsReady ? null : controller.isLoading &&
-          controller.selectableItems.length === 0 &&
-          !controller.showCreateAction ? (
+        {controller.isLoading &&
+        controller.selectableItems.length === 0 &&
+        !controller.showCreateAction ? (
           <PaletteState
             title={t('auto.components.WorktreeJumpPalette.ff908adfe9', 'Loading jump targets')}
             subtitle={t(

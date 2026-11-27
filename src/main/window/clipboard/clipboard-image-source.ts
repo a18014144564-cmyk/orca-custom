@@ -5,9 +5,9 @@ import {
 } from './clipboard-windows-image-file'
 
 type ClipboardImageReader = {
-  availableFormats: () => string[] | Promise<string[]>
-  readBuffer: (format: string) => Buffer | Promise<Buffer>
-  has: (format: string) => boolean | Promise<boolean>
+  availableFormats: () => string[]
+  readBuffer: (format: string) => Buffer
+  has: (format: string) => boolean
 }
 
 // macOS image data beside a file URL can be omitted from availableFormats().
@@ -18,29 +18,23 @@ type ClipboardImageSource =
   | { kind: 'windows-file'; windowsFileFormats: WindowsClipboardFileFormats }
 
 /** Select image sources without decoding pixels or reading a copied file. */
-export async function readClipboardImageSource(
+export function readClipboardImageSource(
   clipboard: ClipboardImageReader,
   platform: NodeJS.Platform = process.platform
-): Promise<ClipboardImageSource | null> {
-  const uriList = platform === 'win32' ? await clipboard.readBuffer('text/uri-list') : null
+): ClipboardImageSource | null {
   const formats =
     platform === 'win32'
       ? {
-          ...(uriList?.length ? { uriList } : {}),
-          fileNameW: await clipboard.readBuffer('FileNameW'),
-          shellIdListArray: await clipboard.readBuffer('Shell IDList Array')
+          fileNameW: clipboard.readBuffer('FileNameW'),
+          shellIdListArray: clipboard.readBuffer('Shell IDList Array')
         }
       : null
   const windowsFileFormats = formats && readWindowsCopiedImageFilePath(formats) ? formats : null
-  if (clipboardFormatsIncludeImage(await clipboard.availableFormats())) {
+  if (clipboardFormatsIncludeImage(clipboard.availableFormats())) {
     return { kind: 'native', windowsFileFormats }
   }
-  if (platform === 'darwin') {
-    for (const type of MAC_PASTEBOARD_IMAGE_TYPES) {
-      if (await clipboard.has(type)) {
-        return { kind: 'native', windowsFileFormats: null }
-      }
-    }
+  if (platform === 'darwin' && MAC_PASTEBOARD_IMAGE_TYPES.some((type) => clipboard.has(type))) {
+    return { kind: 'native', windowsFileFormats: null }
   }
   return windowsFileFormats ? { kind: 'windows-file', windowsFileFormats } : null
 }

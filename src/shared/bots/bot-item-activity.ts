@@ -5,7 +5,7 @@
 // first one caused (`cause: 'answer'`) is not shown while the question is loaded. Answers recorded by
 // older hosts are replies like any other.
 import { botItemCommentFiles } from './bot-item-comment-files'
-import { botItemNamedAnswers, botItemWordsBesideAnswers } from './bot-item-answer-lines'
+import { botItemNamedAnswers } from './bot-item-answer-lines'
 import {
   botItemCommentImages,
   botItemLinksOnePerChain,
@@ -38,9 +38,6 @@ export type BotItemActivityEntry =
       ended?: BotItemAskEnd
       /** On the owner's reply to a question: the question it answers, by its first line. */
       replyTo?: { eventId: string; text: string }
-      /** The owner's words sent with answers to several questions: the answers read on the ask's lines,
-       *  so the card shows only these, quoting no question. */
-      beside?: string
       /** The owner's answer reads in full on its ask's lines ("Question → answer"): no card of its own. */
       onAsk?: true
     }
@@ -85,26 +82,6 @@ function readsOnAsk(event: BotItemEvent, pairing: BotItemQuestionPairing): boole
     !Array.isArray(event.data.decisions) &&
     botItemCommentImages(event.data).length === 0 &&
     botItemCommentFiles(text).files.length === 0
-  )
-}
-
-/** The owner's words beside the answers a comment gave an ask of several questions by name. */
-function besideAnswers(event: BotItemEvent, pairing: BotItemQuestionPairing): string | null {
-  const paired = pairing.replies.get(event.id)
-  const ask = paired ? pairing.questions.get(paired.questionId) : undefined
-  // A recorded answer's free-text lines show only on its card (botItemAnswerWords reads them as null).
-  if (
-    !ask ||
-    ask.shape.decisions.length < 2 ||
-    typeof event.data.text !== 'string' ||
-    Array.isArray(event.data.decisions)
-  ) {
-    return null
-  }
-  return botItemWordsBesideAnswers(
-    ask.shape,
-    event.data.text,
-    ask.answers.map((answer, index) => answer?.id === event.id && !ask.byOrder[index])
   )
 }
 
@@ -201,8 +178,7 @@ function eventEntries(
       entries.push({ kind: 'event', key: event.id, at: event.at, event })
       continue
     }
-    const beside = besideAnswers(event, pairing)
-    const replyTo = beside === null ? replyQuote(event, comments, pairing) : undefined
+    const replyTo = replyQuote(event, comments, pairing)
     const asked = pairing.questions.get(event.id)
     entries.push({
       kind: 'comment',
@@ -216,7 +192,6 @@ function eventEntries(
       ...(asked ? { answers: asked.answers, byOrder: asked.byOrder } : {}),
       ...(asked?.ended ? { ended: asked.ended } : {}),
       ...(replyTo ? { replyTo } : {}),
-      ...(beside !== null ? { beside } : {}),
       ...(readsOnAsk(event, pairing) ? { onAsk: true as const } : {})
     })
   }

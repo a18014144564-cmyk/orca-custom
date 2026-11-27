@@ -97,10 +97,14 @@ export abstract class CodexRuntimeHomeState {
     target: CodexAccountSelectionTarget,
     options?: { probeHome?: boolean }
   ): string | null
+  protected abstract finishWslLaunchPreparation(
+    target: CodexAccountSelectionTarget,
+    homePath: string | null
+  ): void
   protected abstract syncWslConfigAndGlobalInstructionsForLaunch(
     target: CodexAccountSelectionTarget,
     runtimeHomePath: string | null
-  ): Promise<void>
+  ): void
   /** `pinnedWslDistro`: the distro a background poll gated, read as launch reads its named target. */
   abstract prepareForRateLimitFetch(
     target?: CodexAccountSelectionTarget,

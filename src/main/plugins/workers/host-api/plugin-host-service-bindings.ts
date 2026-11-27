@@ -12,11 +12,7 @@ import { pluginSettingDefaults } from '../../../../shared/plugins/contributions/
 import { PluginSecretsStore, pluginSecretsProtection } from '../../storage/plugin-secrets-store'
 import { PluginKvStore } from '../../storage/plugin-storage-store'
 import type { TerminalInputKind } from '../../../../shared/terminal/input/terminal-input-kind'
-import {
-  pluginWorkspaceTerminal,
-  type PluginAgentStatusRow,
-  type PluginListedTerminal
-} from './plugin-workspace-projection'
+import { pluginTerminalTitle, type PluginAgentStatusRow } from './plugin-workspace-projection'
 import type { PluginAppearanceService } from '../../appearance/plugin-appearance-service'
 import type { PluginEditorTypographySource } from '../../appearance/plugin-editor-typography'
 
@@ -32,7 +28,15 @@ export type PluginRuntimeDelegate = {
     worktreeSelector?: string,
     limit?: number,
     opts?: { includeVisualLayouts?: boolean }
-  ): Promise<{ terminals: PluginListedTerminal[] }>
+  ): Promise<{
+    terminals: {
+      handle: string
+      title: string | null
+      paneTitle?: string
+      tabId?: string
+      leafId?: string
+    }[]
+  }>
   sendTerminal(
     handle: string,
     action: { text?: string; enter?: boolean },
@@ -99,7 +103,13 @@ export function bindPluginHostServices(input: {
         PLUGIN_WORKSPACE_TERMINAL_LIMIT,
         { includeVisualLayouts: false }
       )
-      return result.terminals.slice(0, PLUGIN_WORKSPACE_TERMINAL_LIMIT).map(pluginWorkspaceTerminal)
+      return result.terminals.slice(0, PLUGIN_WORKSPACE_TERMINAL_LIMIT).map((terminal) => ({
+        id: terminal.handle,
+        title: pluginTerminalTitle(terminal),
+        ...(terminal.tabId && terminal.leafId
+          ? { paneKey: `${terminal.tabId}:${terminal.leafId}` }
+          : {})
+      }))
     },
     listAgentStatuses: () => delegate.listAgentStatuses?.() ?? [],
     listAgentTaskTitles: () => {

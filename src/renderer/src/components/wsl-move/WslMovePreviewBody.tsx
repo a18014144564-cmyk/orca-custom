@@ -23,8 +23,7 @@ export type WslMovePreviewBodyProps = {
   distro: string
   rows: WslMoveProjectRow[]
   selected: readonly WslMoveRowRef[]
-  /** From the selection's preview; null until it is ready. */
-  counts: WslMoveCounts | null
+  counts: WslMoveCounts
   /** The selection's preview; null while it is being checked. */
   preview: WslMovePreview | null
   /** Listed by the whole-distro preview but not moved, each with why. */
@@ -98,7 +97,7 @@ export function WslMovePreviewBody(props: WslMovePreviewBodyProps): React.JSX.El
                 )
               })}
             </ul>
-            {selected.length > 0 && props.counts ? (
+            {selected.length > 0 ? (
               <div className="text-xs text-muted-foreground" data-testid="wsl-move-counts">
                 {countsLine(props.counts, t)}
               </div>

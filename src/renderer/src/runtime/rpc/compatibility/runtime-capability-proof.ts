@@ -11,25 +11,18 @@ import {
   RUNTIME_CAPABILITY_STATUS_TTL_MS
 } from './runtime-compatibility-cache'
 import { getRuntimeEnvironmentStatus } from './runtime-compatibility-probe'
-import {
-  throwIfSignalAborted,
-  waitForPromiseWithSignal
-} from '../../../../../shared/concurrency/abort-signal-reason'
 
 export async function runtimeEnvironmentSupportsCapability(
   environmentId: string,
   capability: RuntimeCapability,
-  timeoutMs?: number,
-  admissionSignal?: AbortSignal
+  timeoutMs?: number
 ): Promise<boolean> {
-  const { supported } = await resolveRuntimeEnvironmentCapabilities(
+  const [supported] = await runtimeEnvironmentSupportsCapabilities(
     environmentId,
     [capability],
-    timeoutMs,
-    undefined,
-    admissionSignal
+    timeoutMs
   )
-  return supported[0]
+  return supported
 }
 
 export async function runtimeEnvironmentSupportsCapabilities(
@@ -78,8 +71,7 @@ async function resolveRuntimeEnvironmentCapabilities(
   environmentId: string,
   capabilities: readonly RuntimeCapability[],
   timeoutMs?: number,
-  optional: readonly RuntimeCapability[] = [],
-  admissionSignal?: AbortSignal
+  optional: readonly RuntimeCapability[] = []
 ): Promise<{ supported: boolean[]; status: RuntimeStatus }> {
   const missesRequired = (supported: readonly boolean[]): boolean =>
     supported.some((ok, index) => !ok && !optional.includes(capabilities[index]!))
@@ -88,7 +80,7 @@ async function resolveRuntimeEnvironmentCapabilities(
   // Capability reads must discard rejected probes like ordinary RPCs or a recovered host stays blocked until failure TTL.
   if (cached && cached.failedAt === null) {
     try {
-      await waitForPromiseWithSignal(cached.check, admissionSignal)
+      await cached.check
       if (
         runtimeCompatibilityChecks.get(trimmed) === cached &&
         cached.status &&
@@ -109,11 +101,7 @@ async function resolveRuntimeEnvironmentCapabilities(
       // Fall through to a fresh status.get that refreshes the cache.
     }
   }
-  throwIfSignalAborted(admissionSignal)
-  const status = await waitForPromiseWithSignal(
-    getRuntimeEnvironmentStatus(trimmed, timeoutMs),
-    admissionSignal
-  )
+  const status = await getRuntimeEnvironmentStatus(trimmed, timeoutMs)
   const supported = capabilities.map(
     (capability) => status.capabilities?.includes(capability) === true
   )

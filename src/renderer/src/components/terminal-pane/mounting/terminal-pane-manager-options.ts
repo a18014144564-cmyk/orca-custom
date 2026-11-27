@@ -1,10 +1,6 @@
 import type { IDisposable } from '@xterm/xterm'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 import type { PaneManagerOptions } from '@/lib/pane-manager/pane-manager-types'
-import {
-  noteBotThreadPaneActivation,
-  withBotThreadPaneHover
-} from '@/lib/agent-session/open/bot-thread-open-lifecycle'
 import { useAppStore } from '@/store/index'
 import { resolveTerminalLigaturesEnabled } from '../../../../../shared/terminal/appearance/terminal-ligatures'
 import { resolveTerminalFontWeights } from '../../../../../shared/terminal/appearance/terminal-fonts'
@@ -58,10 +54,7 @@ export function createTerminalPaneManagerOptions(
   return {
     onPaneCreated: createTerminalPaneCreatedHandler(context),
     onPaneClosed: createTerminalPaneClosedHandler(context),
-    withHoverFocus: withBotThreadPaneHover,
-    onPaneActivation: (leafId, interaction, changed) =>
-      noteBotThreadPaneActivation(tabId, leafId, interaction, changed),
-    onActivePaneChange: (pane, interaction) => {
+    onActivePaneChange: (pane) => {
       const layout = useAppStore.getState().terminalLayoutsByTabId[tabId]
       const ptyIdsByLeafId = layout?.ptyIdsByLeafId ?? {}
       if (Object.keys(ptyIdsByLeafId).length > 0 && !ptyIdsByLeafId[pane.leafId]) {
@@ -74,7 +67,7 @@ export function createTerminalPaneManagerOptions(
           ? (managerRef.current?.getNumericIdForLeaf(fallbackLeafId) ?? null)
           : null
         if (fallbackPaneId != null && fallbackPaneId !== pane.id) {
-          managerRef.current?.setActivePane(fallbackPaneId, { focus: true, interaction })
+          managerRef.current?.setActivePane(fallbackPaneId, { focus: true })
           return
         }
       }

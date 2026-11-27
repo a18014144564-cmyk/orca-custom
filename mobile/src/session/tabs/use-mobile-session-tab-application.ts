@@ -22,7 +22,6 @@ import {
 import {
   applyClosedTabTombstones,
   confirmsMirroredTabSelection,
-  keepChatsHostCannotRead,
   useSessionSnapshotGate
 } from './session-tab-snapshot-gate'
 import type { SessionTabsApplyOutcome } from './mobile-session-tabs-stream-health'
@@ -84,12 +83,11 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
       if (!acceptSessionSnapshot(result, appliedSnapshotMarkerRef.current)) {
         return { accepted: false }
       }
-      const hostTabs = keepChatsHostCannotRead(result, sessionTabsRef.current)
       const applicationRevision = ++appliedSessionTabsRevisionRef.current
       const now = Date.now()
       let nextTabs = withRememberedNativeChatIdentity(
         withSessionTabStatusReceipts(
-          applyClosedTabTombstones(hostTabs, closedTabTombstonesRef.current, now),
+          applyClosedTabTombstones(result.tabs, closedTabTombstonesRef.current, now),
           sessionTabsRef.current,
           now
         ),

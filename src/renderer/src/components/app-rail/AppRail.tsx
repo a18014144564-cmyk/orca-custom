@@ -6,7 +6,6 @@ import { useHelpMenuController } from '@/components/sidebar/chrome/help-menu-con
 import { useSetupGuideProgressSnapshot } from '@/components/setup-guide/setup-guide-progress-snapshot'
 import { nextAppRailFocusIndex } from './app-rail-roving-focus'
 import {
-  activateWorkspacesRailItem,
   ensureWorkspacesRailListOpen,
   isWorkspacesRailItemActive,
   navigateFromRail
@@ -39,6 +38,7 @@ import {
 import { getTitlebarSidebarToggle } from '@/app-shell/chrome/titlebar-sidebar-toggle-ref'
 import { useBotsEnabled } from '@/lib/bot-catalog'
 import {
+  getSidebarZoneMode,
   setSidebarZoneMode,
   useSidebarZoneMode,
   useSidebarZoneOrder,
@@ -109,13 +109,14 @@ export function AppRail({
     !botsEnabled && (rawZoneMode === 'teams' || rawZoneMode === 'bots') ? 'all' : rawZoneMode
   const zoneItemIds = getZoneRailItemIds(botsEnabled, zoneOrder)
   const activateZoneRailItem = (targetZone: SidebarZoneMode): void => {
-    if (targetZone === 'all' && zoneMode === 'all') {
-      navigateFromRail(() => activateWorkspacesRailItem(useAppStore))
-      return
-    }
     navigateFromRail(() => {
-      if (isWorkspacesRailItemActive(useAppStore.getState()) && zoneMode === targetZone) {
-        useAppStore.getState().toggleSidebar()
+      const state = useAppStore.getState()
+      const liveZone: SidebarZoneMode =
+        !botsEnabled && (getSidebarZoneMode() === 'teams' || getSidebarZoneMode() === 'bots')
+          ? 'all'
+          : getSidebarZoneMode()
+      if (isWorkspacesRailItemActive(state) && state.sidebarOpen && liveZone === targetZone) {
+        state.toggleSidebar()
         return
       }
       setSidebarZoneMode(targetZone)

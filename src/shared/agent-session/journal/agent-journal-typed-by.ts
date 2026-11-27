@@ -3,8 +3,7 @@
  *  messages and ones from before it was kept. A device's `account` is the Orca account name it
  *  claimed when the message was sent: unverified, shown by name only. `accountId` is that claim's
  *  id; `own` compares it with the host's account at send (absent when either side had none);
- *  `computer` names the computer the claim came from, and `phone` the relayed phone it was typed on.
- *  An agent's orca CLI on a paired device keeps that device and its `own` the same way. */
+ *  `computer` names the computer the claim came from, and `phone` the relayed phone it was typed on. */
 export type AgentJournalTypedBy =
   | { by: 'host' }
   | {
@@ -16,7 +15,7 @@ export type AgentJournalTypedBy =
       computer?: string
       phone?: string
     }
-  | { by: 'agent'; deviceId?: string; own?: boolean }
+  | { by: 'agent' }
 
 /** A message another person typed on their paired computer, as its sender line draws it. */
 export type OtherPersonTypist = { name: string; computer?: string; phone?: string }

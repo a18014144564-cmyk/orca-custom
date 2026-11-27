@@ -70,7 +70,7 @@ export async function refuseUninstalledWorkerAgent(
     return
   }
   const installed = await runtime
-    .detectProjectLaunchContext(repoSelector, agent)
+    .detectProjectLaunchContext(repoSelector)
     .then((context): readonly string[] => context.agents)
     .catch(() => null)
   if (installed && !installed.includes(agent)) {
