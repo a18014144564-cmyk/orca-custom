@@ -111,33 +111,23 @@ export function botChatMoreMatchesNote(t: Translate, count: number): string {
   )
 }
 
-/** A host's search answer as rows: each chat, and the workers that hit when the chat itself didn't.
- *  Only the answer shows, shaped as the list is (`botOwnChatTree`): a group room session's matched
- *  workers sit under Home Chat. With no Home in the answer, the list's `home` lends only its header. */
+/** A host's search answer as rows: each single-bot chat and its matching workers; group room
+ *  sessions and their workers stay out of individual bot search results. */
 export function botChatSearchHits(
   result: BotChatSearchResult,
-  home: BotChatTreeChat | null = null
+  _home: BotChatTreeChat | null = null
 ): BotChatSearchHit[] {
-  const answerHome = result.chats.find((chat) => chat.origin === 'home' && !chat.closed)
-  const roomHit = result.matches.some((match) => isBotGroupMemberSession(match.chatId))
-  const header =
-    !answerHome && roomHit && home
-      ? { ...home, running: [], runningTotal: 0, finished: [], finishedTotal: 0, failedTotal: 0 }
-      : null
   const own = botOwnChatTree({
-    chats: header ? [header, ...result.chats] : result.chats,
+    chats: result.chats,
     workspaceChats: {}
   })
-  const homeId = answerHome?.chatId ?? header?.chatId ?? null
   const byId = new Map(own.chats.map((chat) => [chat.chatId, chat]))
-  // Each listed chat once, in the answer's order; a room's worker hits join Home's.
   const hits = new Map<string, ReadonlySet<string> | null>()
   for (const match of result.matches) {
-    const room = homeId !== null && isBotGroupMemberSession(match.chatId)
-    if (room && !match.workerKeys) {
+    if (isBotGroupMemberSession(match.chatId)) {
       continue
     }
-    const chatId = room ? homeId : match.chatId
+    const chatId = match.chatId
     const keys = match.workerKeys ? new Set(match.workerKeys) : null
     const before = hits.get(chatId)
     hits.set(

@@ -11,22 +11,29 @@ import type { AgentPaneThread } from '@/components/activity/threads/activity-thr
 
 const STRUCTURED_TAB_PREFIX = 'structured-agent-session-'
 
-export function collectExcludedBotSessionIds(
-  bots: readonly Pick<Bot, 'chatSessionId'>[],
+export function collectExcludedBotTeamSessionIds(
   botGroups: readonly Pick<BotGroup, 'members' | 'formerSessionIds' | 'threads'>[]
 ): ReadonlySet<string> {
   const ids = new Set<string>()
-  for (const bot of bots) {
-    if (bot.chatSessionId) {
-      ids.add(bot.chatSessionId)
-    }
-  }
   for (const group of botGroups) {
     const rooms = [group, ...(group.threads ?? [])]
     for (const sessionId of botGroupSessionIds(rooms)) {
       if (sessionId) {
         ids.add(sessionId)
       }
+    }
+  }
+  return ids
+}
+
+export function collectExcludedBotSessionIds(
+  bots: readonly Pick<Bot, 'chatSessionId'>[],
+  botGroups: readonly Pick<BotGroup, 'members' | 'formerSessionIds' | 'threads'>[]
+): ReadonlySet<string> {
+  const ids = new Set<string>(collectExcludedBotTeamSessionIds(botGroups))
+  for (const bot of bots) {
+    if (bot.chatSessionId) {
+      ids.add(bot.chatSessionId)
     }
   }
   return ids

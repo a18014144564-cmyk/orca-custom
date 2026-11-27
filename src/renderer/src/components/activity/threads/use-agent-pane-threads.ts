@@ -31,10 +31,27 @@ import type {
   ThreadReadFilter
 } from '../../../../../shared/agent-status/presentation/agents-view-thread-filters'
 import type { ActivityThreadGroup, AgentPaneThread } from './activity-thread-types'
+import { useBotsEnabled } from '@/lib/bot-catalog'
+import { useBotGroups } from '@/lib/bot-group-list'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
+import { selectSidebarChildrenByParentIdentity } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
+import {
+  getBotHomes,
+  getBotListedWorktreeIdentities,
+  isHome
+} from '../../../../../shared/bots/bot-homes'
+import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
+import { getWorktreeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import type { Worktree } from '../../../../../shared/worktree/types'
+import {
+  collectExcludedBotTeamSessionIds,
+  isExcludedBotOrTeamThread
+} from '@/components/sidebar/four-zone/sidebar-codex-bot-filter'
 
 const EMPTY_PANE_KEYS: ReadonlySet<string> = new Set()
 const EMPTY_THREADS: AgentPaneThread[] = []
 const EMPTY_GROUPS: ActivityThreadGroup[] = []
+const NO_CHILDREN: ReadonlyMap<string, readonly Worktree[]> = new Map()
 
 /** Every Activity thread before any view filter, read from the window's shared projection. */
 export function useAllAgentPaneThreads({
@@ -99,12 +116,61 @@ export function useAgentPaneThreads(args: {
         : EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
     [runtimeEnvironments, pairedHostStatuses]
   )
-  const { storeData: unscopedStoreData, allThreads } = useAllAgentPaneThreads({ badgeOnly })
+  const { storeData: unscopedStoreData, allThreads: rawAllThreads } = useAllAgentPaneThreads({
+    badgeOnly
+  })
   const defaultHostId = useAgentPaneThreadsDefaultHostId()
   const storeData = useMemo(
     () => ({ ...unscopedStoreData, defaultHostId }),
     [unscopedStoreData, defaultHostId]
   )
+  const botsEnabled = useBotsEnabled()
+  const botGroups = useBotGroups(botsEnabled)
+  const folderWorkspaces = useAppStore(selectFolderWorkspaces)
+  const worktreeLineageById = useAppStore((s) => s.worktreeLineageById)
+  const teamChildrenByParent = useAppStoreWithHostStatuses((s, statuses) =>
+    botGroups.length === 0 ? NO_CHILDREN : selectSidebarChildrenByParentIdentity(s, statuses)
+  )
+  // Keep Bot Team chats and dispatched orchestration workers strictly inside the Bot Teams zone;
+  // global Activity / bell only shows direct single-chat threads.
+  const allThreads = useMemo(() => {
+    const excludedTeamSessionIds = collectExcludedBotTeamSessionIds(botGroups)
+    const teamHomeWorktreeIds = new Set<string>()
+    if (botGroups.length > 0) {
+      for (const folder of folderWorkspaces) {
+        if (isHome(folder, botGroups)) {
+          teamHomeWorktreeIds.add(folderWorkspaceKey(folder.id))
+        }
+      }
+    }
+    const teamOwnedWorktreeIdentities =
+      botGroups.length === 0
+        ? EMPTY_PANE_KEYS
+        : getBotListedWorktreeIdentities(
+            getBotHomes(botGroups, folderWorkspaces).map(({ home }) => home),
+            teamChildrenByParent
+          )
+    return rawAllThreads.filter((thread) => {
+      const hostId = getWorktreeExecutionHostId(
+        thread.worktree,
+        thread.repo ?? undefined,
+        defaultHostId
+      )
+      return !isExcludedBotOrTeamThread(thread, hostId, {
+        botHomeWorktreeIds: teamHomeWorktreeIds,
+        botOwnedWorktreeIdentities: teamOwnedWorktreeIdentities,
+        excludedBotSessionIds: excludedTeamSessionIds,
+        worktreeLineageById
+      })
+    })
+  }, [
+    rawAllThreads,
+    botGroups,
+    folderWorkspaces,
+    teamChildrenByParent,
+    worktreeLineageById,
+    defaultHostId
+  ])
 
   const selectedPaneKeyIsLive =
     selectedPaneKey === null || allThreads.some((thread) => thread.paneKey === selectedPaneKey)

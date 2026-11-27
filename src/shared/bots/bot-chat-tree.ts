@@ -199,41 +199,21 @@ export function normalizeBotChatFolds(value: unknown): Record<string, BotChatFol
   return Object.fromEntries(entries.slice(-BOT_CHAT_FOLDS_MAX))
 }
 
-/** The bot's chats as its own lists show them: a group room session belongs to its room, so its row
- *  drops, and its workers move under Home Chat, where anything without a chat goes; every worker that
- *  waits on the owner keeps a row. With no Home Chat to take them, nothing moves. Finished workers
- *  past the room's shown page stay out: Home's Show more reads only Home's. */
+/** The bot's chats as its own lists show them: group room sessions and their workers belong strictly
+ *  to their Bot Team room, never to the individual bot's single-chat list or Home Chat. */
 export function botOwnChatTree<T extends BotChatTreeRead>(tree: T): T {
-  const rooms = tree.chats.filter((chat) => isBotGroupMemberSession(chat.chatId))
-  const home = tree.chats.find((chat) => chat.origin === 'home' && !chat.closed)
-  if (rooms.length === 0 || !home) {
+  const roomIds = new Set(
+    tree.chats.filter((chat) => isBotGroupMemberSession(chat.chatId)).map((chat) => chat.chatId)
+  )
+  if (roomIds.size === 0) {
     return tree
   }
-  const roomIds = new Set(rooms.map((chat) => chat.chatId))
-  const moved = rooms.flatMap((chat) => chat.finished)
-  const merged: BotChatTreeChat = {
-    ...home,
-    running: [...home.running, ...rooms.flatMap((chat) => chat.running)].toSorted(
-      (a, b) => Number(b.state === 'needs-you') - Number(a.state === 'needs-you')
-    ),
-    runningTotal: rooms.reduce((sum, chat) => sum + chat.runningTotal, home.runningTotal),
-    finished: [...home.finished, ...moved].toSorted(
-      (a, b) => (b.settledAt ?? b.startedAt) - (a.settledAt ?? a.startedAt)
-    ),
-    finishedTotal: home.finishedTotal + moved.length,
-    failedTotal: home.failedTotal + moved.filter((worker) => worker.state === 'failed').length
-  }
   const workspaceChats = Object.fromEntries(
-    Object.entries(tree.workspaceChats).map(([workspace, chatId]) => [
-      workspace,
-      roomIds.has(chatId) ? home.chatId : chatId
-    ])
+    Object.entries(tree.workspaceChats).filter(([, chatId]) => !roomIds.has(chatId))
   )
   return {
     ...tree,
-    chats: tree.chats.flatMap((chat) =>
-      roomIds.has(chat.chatId) ? [] : chat === home ? [merged] : [chat]
-    ),
+    chats: tree.chats.filter((chat) => !roomIds.has(chat.chatId)),
     workspaceChats
   }
 }

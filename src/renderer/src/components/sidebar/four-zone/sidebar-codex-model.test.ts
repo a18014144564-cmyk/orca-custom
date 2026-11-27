@@ -7,6 +7,8 @@ import {
   normalizeSidebarZoneOrder
 } from './sidebar-four-zone-model'
 import { buildCodexSidebarModel, formatCodexRelativeTime } from './sidebar-codex-model'
+import { botOwnChatTree, type BotChatTreeChat, type BotChatTreeWorker } from '../../../../../shared/bots/bot-chat-tree'
+import { botChatSearchHits } from '../../../../../shared/bots/bot-chat-tree-view'
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import type { FolderWorkspace } from '../../../../../shared/folder-workspaces/folder-workspace-types'
@@ -360,6 +362,60 @@ describe('buildCodexSidebarModel', () => {
     expect(model.projects[0].worktrees.map((wt) => wt.id)).toEqual(['wt-main'])
     expect(model.projects[0].openTabCount).toBe(1)
     expect(model.recentItems.map((item) => item.title)).toEqual(['正常用户对话'])
+  })
+
+  it('keeps Bot Team sessions and their workers strictly out of individual Bot chat tree and search', () => {
+    const teamWorker: BotChatTreeWorker = {
+      key: 'w-team',
+      title: '团队派发 Worker',
+      state: 'running',
+      startedAt: 2000,
+      paneKey: 'tab:leaf',
+      worktreeId: 'wt-1',
+      dispatchId: 'd-1'
+    }
+    const homeChat: BotChatTreeChat = {
+      chatId: 'bot-home-1',
+      title: 'Home Chat',
+      origin: 'home',
+      closed: false,
+      live: 'idle',
+      unread: false,
+      lastActiveAt: 1000,
+      running: [],
+      runningTotal: 0,
+      finished: [],
+      finishedTotal: 0,
+      failedTotal: 0
+    }
+    const teamRoomChat: BotChatTreeChat = {
+      ...homeChat,
+      chatId: 'bot-group-member-42',
+      title: 'Team Room',
+      origin: 'side',
+      running: [teamWorker],
+      runningTotal: 1
+    }
+
+    const own = botOwnChatTree({
+      chats: [homeChat, teamRoomChat],
+      workspaceChats: { 'wt-1': 'bot-group-member-42', 'wt-home': 'bot-home-1' }
+    })
+    expect(own.chats).toHaveLength(1)
+    expect(own.chats[0].chatId).toBe('bot-home-1')
+    expect(own.chats[0].running).toEqual([])
+    expect(own.chats[0].runningTotal).toBe(0)
+    expect(own.workspaceChats).toEqual({ 'wt-home': 'bot-home-1' })
+
+    const searchHits = botChatSearchHits(
+      {
+        chats: [homeChat, teamRoomChat],
+        matches: [{ chatId: 'bot-group-member-42', workerKeys: ['w-team'] }],
+        more: 0
+      },
+      homeChat
+    )
+    expect(searchHits).toEqual([])
   })
 
   it('formats concise Chinese/short relative timestamps', () => {

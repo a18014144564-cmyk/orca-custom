@@ -23,6 +23,7 @@ import {
   workerRowIsRunning
 } from './bot-activity-recorded-workers'
 import { handedAgentRows, type BotHandedAgentObservation } from './bot-activity-handed-agents'
+import { isBotGroupMemberSession } from './bot-group'
 import type { BotUpNext } from './bot-look-around'
 import { pendingWaits, waitDueAt } from '../automation-once'
 
@@ -243,15 +244,11 @@ export function buildBotActivity(input: BotActivityInput): BotActivity {
     originByPaneKey.set(link.paneKey, { kind: 'thread', source: link.source })
   }
   for (const session of input.sessions) {
-    // The Chat is also reached from direct messages, but it is still your chat.
-    if (session.sessionId === input.bot.chatSessionId || !originByPaneKey.has(session.paneKey)) {
+    if (!isBotGroupMemberSession(session.sessionId) && (session.sessionId === input.bot.chatSessionId || !originByPaneKey.has(session.paneKey))) {
       originByPaneKey.set(session.paneKey, sessionOrigin(input, session, automationBySessionId))
     }
   }
-  const parentByPaneKey = new Map(
-    input.workers.map((worker) => [worker.paneKey, worker.orchestration.parentPaneKey])
-  )
-  /** A worker a worker started belongs to whatever started the first one. */
+  const parentByPaneKey = new Map(input.workers.map((w) => [w.paneKey, w.orchestration.parentPaneKey]))
   const originOf = (worker: BotWorkerObservation): BotActivityOrigin | null => {
     const seen = new Set<string>()
     let paneKey = worker.orchestration.parentPaneKey
@@ -287,15 +284,13 @@ export function buildBotActivity(input: BotActivityInput): BotActivity {
   for (const { worker, origin } of recordedByDispatch.values()) {
     placeWorker(recordedWorkerRow(worker, origin, null))
   }
-  // An agent in the bot's workspaces that is one of its own workers already has its row, here or on a
-  // paired computer: pane keys carry a leaf UUID, so one set serves every host.
   const placed = new Set(
-    [...workers, ...completed].flatMap((row) =>
-      row.kind === 'worker' && row.paneKey ? [row.paneKey] : []
-    )
+    [...workers, ...completed].flatMap((row) => (row.kind === 'worker' && row.paneKey ? [row.paneKey] : []))
   )
   workers.push(
-    ...handedAgentRows((input.handedAgents ?? []).filter((agent) => !placed.has(agent.paneKey)))
+    ...handedAgentRows(
+      (input.handedAgents ?? []).filter((a) => !placed.has(a.paneKey) && !a.paneKey.includes('bot-group-member-'))
+    )
   )
 
   for (const run of input.runs) {

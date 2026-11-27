@@ -159,7 +159,21 @@ export function useVisibleSidebarWorktrees(args: {
         ? [args.agentSendTargetWorktreeId]
         : undefined
     })
-    return withoutHiddenVmWorktrees(visible, hiddenVmCheckouts)
+    const filtered = visible.filter((wt) => {
+      if (wt.id === args.agentSendTargetWorktreeId) {
+        return true
+      }
+      const lineage = worktreeLineageById[wt.id]
+      if (!lineage) {
+        return true
+      }
+      return (
+        lineage.origin !== 'orchestration' &&
+        lineage.capture?.source !== 'bot-hand-over' &&
+        !lineage.orchestrationRunId
+      )
+    })
+    return withoutHiddenVmWorktrees(filtered, hiddenVmCheckouts)
   }, [
     hiddenVmCheckouts,
     args.agentSendTargetWorktreeId,
