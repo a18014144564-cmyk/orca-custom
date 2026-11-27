@@ -2,9 +2,9 @@ import { Maximize2, Monitor, Plus, TabletSmartphone } from 'lucide-react-native'
 import { useMemo } from 'react'
 import { Pressable, ScrollView, Text, View } from 'react-native'
 import type { AgentListRow } from '../../agents/agent-list-rows'
-import { MobileWebShellScreen } from '../../mobile-web-shell/MobileWebShellScreen'
 import { colors } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { FoldableHostShellPane } from './FoldableHostShellPane'
 import {
   buildFoldableStageRoute,
   foldableStageKey,
@@ -39,10 +39,11 @@ export function MobileFoldableTabletopView(props: {
     <View style={styles.tabletopRoot}>
       <View style={[styles.tabletopTop, { height: topHeight }]}>
         {target && stageRoute ? (
-          <MobileWebShellScreen
-            key={`tt:${foldableStageKey(target)}`}
+          <FoldableHostShellPane
+            shellKey={`tt:${foldableStageKey(target)}`}
             hostId={target.hostId}
             route={stageRoute}
+            onOpenFullScreen={() => props.onOpenFullScreen(target)}
           />
         ) : (
           <View style={styles.emptyStage}>

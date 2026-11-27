@@ -10,9 +10,9 @@ import {
 } from 'lucide-react-native'
 import { useMemo, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { MobileWebShellScreen } from '../../mobile-web-shell/MobileWebShellScreen'
 import { colors } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { FoldableHostShellPane } from './FoldableHostShellPane'
 import {
   buildFoldableAuxRoute,
   buildFoldableStageRoute,
@@ -138,7 +138,12 @@ export function MobileFoldableStage(props: {
 
       <View style={styles.stageBody}>
         <View style={styles.stagePane}>
-          <MobileWebShellScreen key={stageKey} hostId={target.hostId} route={stageRoute} />
+          <FoldableHostShellPane
+            shellKey={stageKey}
+            hostId={target.hostId}
+            route={stageRoute}
+            onOpenFullScreen={() => props.onOpenFullScreen(target)}
+          />
         </View>
 
         {showSplit ? (
@@ -171,10 +176,11 @@ export function MobileFoldableStage(props: {
                 })}
               </View>
               <View style={styles.stagePane}>
-                <MobileWebShellScreen
-                  key={`${stageKey}:aux:${auxMode}`}
+                <FoldableHostShellPane
+                  shellKey={`${stageKey}:aux:${auxMode}`}
                   hostId={target.hostId}
                   route={auxRoute}
+                  onOpenFullScreen={() => props.onOpenFullScreen(target)}
                 />
               </View>
             </View>
