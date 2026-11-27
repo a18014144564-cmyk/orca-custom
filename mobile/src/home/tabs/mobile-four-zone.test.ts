@@ -16,7 +16,7 @@ import {
   resolvePlatformConnectionHealth
 } from './mobile-four-zone'
 import { buildFiveSlotMobileTabs, FOUR_ZONE_HOME_TABS } from './home-tabs'
-import { buildMobileRunningWindows } from './mobile-running-windows'
+import { buildMobileRunningWindows, countActiveMobileRunningWindows } from './mobile-running-windows'
 import {
   moveMobileTabByOffset,
   moveMobileTabToFirst,
@@ -427,5 +427,129 @@ describe('mobile-four-zone', () => {
       now
     })
     expect(afterClear.items.map((i) => i.title)).toEqual(['Mac 助手'])
+  })
+
+  it('excludes team-dispatched worker tasks (workspace-prefixed lineage, childOf verdict, bot-home children) from Running windows', () => {
+    const now = 20_000_000
+    const winHost = { id: 'win-1', name: 'Win 主机', credentialStatus: 'paired' } as unknown as Parameters<typeof buildMobileRunningWindows>[0]['hosts'][number]
+    const worktreeInfo: Record<string, HostWorktreeInfo> = {
+      'win-1': {
+        hostId: 'win-1',
+        totalWorktrees: 4,
+        activeCount: 4,
+        rows: [
+          { worktreeId: 'wt-normal', repo: 'app', displayName: 'main', branch: 'main', liveTerminalCount: 1 } as unknown as Worktree,
+          { worktreeId: 'wt-orch-git', repo: 'app', displayName: 'team-task', branch: 'feat/task', liveTerminalCount: 1 } as unknown as Worktree,
+          { worktreeId: 'wt-bot-child', repo: 'app', displayName: 'bot-child', branch: 'feat/child', parentWorktreeId: 'folder:bot-home-1', liveTerminalCount: 1 } as unknown as Worktree
+        ],
+        workspaceLineage: {
+          'worktree:wt-orch-git': {
+            childWorkspaceKey: 'worktree:wt-orch-git',
+            parentWorkspaceKey: 'folder:team-1',
+            origin: 'orchestration',
+            capture: { source: 'orchestration-context', confidence: 'explicit' },
+            createdAt: now - 10_000
+          }
+        },
+        agents: [
+          {
+            worktreeId: 'wt-normal',
+            workspaceName: 'main',
+            repo: 'app',
+            branch: 'main',
+            agent: {
+              paneKey: 'tab-user:leaf-1',
+              parentPaneKey: null,
+              state: 'working',
+              prompt: '正常用户任务',
+              taskTitle: '正常用户任务',
+              displayName: null,
+              stateStartedAt: now - 5_000,
+              updatedAt: now - 5_000
+            }
+          },
+          {
+            worktreeId: 'wt-normal',
+            workspaceName: 'main',
+            repo: 'app',
+            branch: 'main',
+            agent: {
+              paneKey: 'tab-verdict-child:leaf-2',
+              parentPaneKey: null,
+              state: 'working',
+              prompt: '团队下发子任务(verdict childOf)',
+              taskTitle: '团队下发子任务(verdict childOf)',
+              displayName: null,
+              stateStartedAt: now - 4_000,
+              updatedAt: now - 4_000,
+              activity: {
+                listed: true,
+                status: 'working',
+                unread: false,
+                clearable: false,
+                sortAt: now - 4_000,
+                title: '团队下发子任务(verdict childOf)',
+                childOf: 'tab-team:coord'
+              }
+            }
+          },
+          {
+            worktreeId: 'wt-orch-git',
+            workspaceName: 'team-task',
+            repo: 'app',
+            branch: 'feat/task',
+            agent: {
+              paneKey: 'tab-orch:leaf-3',
+              parentPaneKey: null,
+              state: 'working',
+              prompt: '团队下发 git worktree 任务',
+              taskTitle: '团队下发 git worktree 任务',
+              displayName: null,
+              stateStartedAt: now - 3_000,
+              updatedAt: now - 3_000
+            }
+          },
+          {
+            worktreeId: 'wt-bot-child',
+            workspaceName: 'bot-child',
+            repo: 'app',
+            branch: 'feat/child',
+            agent: {
+              paneKey: 'tab-bot-child:leaf-4',
+              parentPaneKey: null,
+              state: 'working',
+              prompt: 'Bot 子工作区任务',
+              taskTitle: 'Bot 子工作区任务',
+              displayName: null,
+              stateStartedAt: now - 2_000,
+              updatedAt: now - 2_000
+            }
+          }
+        ] as unknown as HostWorktreeInfo['agents']
+      }
+    }
+
+    const activeCount = countActiveMobileRunningWindows({
+      hosts: [winHost],
+      hostStates: { 'win-1': 'connected' },
+      worktreeInfo,
+      botRows: [],
+      botHomeWorktreeIds: new Set(['folder:bot-home-1']),
+      now
+    })
+    const model = buildMobileRunningWindows({
+      hosts: [winHost],
+      winHostIds: new Set(['win-1']),
+      macHostIds: new Set(),
+      hostStates: { 'win-1': 'connected' },
+      worktreeInfo,
+      botRows: [],
+      botHomeWorktreeIds: new Set(['folder:bot-home-1']),
+      prefs: { idleHideMs: 30 * 60_000, groupByDevice: false, dismissedAtByKey: {} },
+      now
+    })
+
+    expect(activeCount).toBe(1)
+    expect(model.items.map((i) => i.title)).toEqual(['正常用户任务'])
   })
 })

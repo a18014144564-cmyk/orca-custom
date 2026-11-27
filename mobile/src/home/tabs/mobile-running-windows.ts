@@ -1,9 +1,19 @@
-import { agentStatusGroup, everyRow, hostAgents, type AgentListRow } from '../../agents/agent-list-rows'
+import {
+  botGroupSessionIds,
+  isBotGroupMemberSession
+} from '../../../../src/shared/bots/bot-group'
+import {
+  agentStatusGroup,
+  hostAgents,
+  isBotOrWorkerWorktree,
+  listedAgentVerdict,
+  type AgentListRow
+} from '../../agents/agent-list-rows'
 import type { HostCatalogEntry } from '../../host-catalog/host-profile'
 import type { ConnectionState } from '../../transport/connection/connection-state'
 import type { HostWorktreeInfo } from '../../worktree/catalog/home-worktree-info'
 import type { HomeBotRow } from '../bots/home-bot-rows'
-import { formatMobileRelativeTime, isExcludedMobileBotOrWorkerRow } from './mobile-codex-projects'
+import { formatMobileRelativeTime } from './mobile-codex-projects'
 import type { MobileRunningWindowsPrefs } from './mobile-running-prefs'
 
 export * from './mobile-running-prefs'
@@ -76,6 +86,55 @@ function shouldKeepWindow(
   return now - item.lastActivityAt < prefs.idleHideMs
 }
 
+function collectBotSessionIds(botRows: readonly HomeBotRow[]): ReadonlySet<string> {
+  const ids = new Set<string>()
+  for (const row of botRows) {
+    if (row.kind === 'group' && row.group) {
+      const rooms = [row.group, ...(row.group.threads ?? [])]
+      for (const sessionId of botGroupSessionIds(rooms)) {
+        if (sessionId) { ids.add(sessionId) }
+      }
+    } else if (row.kind === 'bot' && row.bot?.chatSessionId) {
+      ids.add(row.bot.chatSessionId)
+    }
+  }
+  return ids
+}
+
+function isDispatchedOrTeamWorkerRow(
+  agentRow: AgentListRow,
+  info: HostWorktreeInfo | undefined,
+  botHomeWorktreeIds: ReadonlySet<string>,
+  botSessionIds: ReadonlySet<string>
+): boolean {
+  const { agent, worktreeId } = agentRow.entry
+  if (
+    agentRow.depth > 0 ||
+    agentRow.entry.bot ||
+    agent.parentPaneKey != null ||
+    listedAgentVerdict(agent)?.childOf != null ||
+    listedAgentVerdict(agent)?.foldedChild === true ||
+    agent.paneKey.includes('bot-group-member-') ||
+    isBotGroupMemberSession(agent.orcaSessionId)
+  ) {
+    return true
+  }
+  if (agent.orcaSessionId && botSessionIds.has(agent.orcaSessionId)) {
+    return true
+  }
+  const colonIdx = agent.paneKey.indexOf(':')
+  const paneSession = colonIdx !== -1 ? agent.paneKey.slice(colonIdx + 1) : ''
+  if (paneSession && botSessionIds.has(paneSession)) {
+    return true
+  }
+  return isBotOrWorkerWorktree(worktreeId, {
+    rows: info?.rows,
+    workspaceLineage: info?.workspaceLineage,
+    botHomeWorktreeIds,
+    excludeBotHomeSelf: true
+  })
+}
+
 export function countActiveMobileRunningWindows(args: {
   hosts: readonly HostCatalogEntry[]
   hostStates: Readonly<Record<string, ConnectionState>>
@@ -86,22 +145,24 @@ export function countActiveMobileRunningWindows(args: {
 }): number {
   const now = args.now ?? Date.now()
   let count = 0
+  const botSessionIds = collectBotSessionIds(args.botRows)
   const safeWorktreeInfo: Record<string, HostWorktreeInfo> = {}
   for (const host of args.hosts) {
     const info = args.worktreeInfo[host.id]
     if (info) { safeWorktreeInfo[host.id] = info }
   }
   for (const host of args.hosts) {
-    const agentRows = everyRow(
-      hostAgents({ hosts: args.hosts, hostStates: args.hostStates, worktreeInfo: safeWorktreeInfo, now }, host.id).roots
-    )
+    const info = args.worktreeInfo[host.id]
+    const agentRows = hostAgents(
+      { hosts: args.hosts, hostStates: args.hostStates, worktreeInfo: safeWorktreeInfo, now },
+      host.id
+    ).roots
     for (const agentRow of agentRows) {
-      const wtId = agentRow.entry.worktreeId
-      if (args.botHomeWorktreeIds.has(wtId) || agentRow.entry.bot || agentRow.stale) { continue }
+      if (agentRow.stale || isDispatchedOrTeamWorkerRow(agentRow, info, args.botHomeWorktreeIds, botSessionIds)) {
+        continue
+      }
       const group = agentStatusGroup(agentRow.dotState)
       if (group !== 'working' && group !== 'needs-you') { continue }
-      const rawRow = args.worktreeInfo[host.id]?.rows?.find((r) => r.worktreeId === wtId)
-      if (rawRow && isExcludedMobileBotOrWorkerRow(rawRow, args.botHomeWorktreeIds, args.worktreeInfo[host.id]?.workspaceLineage)) { continue }
       count += 1
     }
   }
@@ -125,6 +186,7 @@ export function buildMobileRunningWindows(args: {
   now?: number
 }): MobileRunningWindowsModel {
   const now = args.now ?? Date.now()
+  const botSessionIds = collectBotSessionIds(args.botRows)
   const platformOf = (hostId: string): MobileRunningDevicePlatform =>
     args.winHostIds.has(hostId) ? 'win' : args.macHostIds.has(hostId) ? 'mac' : 'other'
 
@@ -137,14 +199,15 @@ export function buildMobileRunningWindows(args: {
   const rawItems: MobileRunningWindowItem[] = []
 
   for (const host of args.hosts) {
-    const agentRows = everyRow(
-      hostAgents({ hosts: args.hosts, hostStates: args.hostStates, worktreeInfo: safeWorktreeInfo, now }, host.id).roots
-    )
+    const info = args.worktreeInfo[host.id]
+    const agentRows = hostAgents(
+      { hosts: args.hosts, hostStates: args.hostStates, worktreeInfo: safeWorktreeInfo, now },
+      host.id
+    ).roots
     for (const agentRow of agentRows) {
-      const wtId = agentRow.entry.worktreeId
-      if (args.botHomeWorktreeIds.has(wtId) || agentRow.entry.bot) { continue }
-      const rawRow = args.worktreeInfo[host.id]?.rows?.find((r) => r.worktreeId === wtId)
-      if (rawRow && isExcludedMobileBotOrWorkerRow(rawRow, args.botHomeWorktreeIds, args.worktreeInfo[host.id]?.workspaceLineage)) { continue }
+      if (isDispatchedOrTeamWorkerRow(agentRow, info, args.botHomeWorktreeIds, botSessionIds)) {
+        continue
+      }
       const group = agentRow.stale ? 'done' : agentStatusGroup(agentRow.dotState)
       const status: MobileRunningWindowStatus =
         group === 'needs-you' ? 'attention' : group === 'working' ? 'working' : 'idle'

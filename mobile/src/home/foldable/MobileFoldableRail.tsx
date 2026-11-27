@@ -87,13 +87,7 @@ export function MobileFoldableRail(props: {
               <Icon
                 size={21}
                 strokeWidth={active ? 2.2 : 1.8}
-                color={
-                  active
-                    ? colors.textPrimary
-                    : id === 'running' && badge > 0
-                      ? colors.statusAmber
-                      : colors.textMuted
-                }
+                color={active ? colors.textPrimary : colors.textMuted}
               />
               {badge > 0 ? (
                 <View style={styles.railBadge} pointerEvents="none">

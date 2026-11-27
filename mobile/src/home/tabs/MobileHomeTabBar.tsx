@@ -86,7 +86,6 @@ export function MobileHomeTabBar(props: {
           icon={TAB_ICONS[tab]}
           label={labels[tab]}
           selected={tab === props.active}
-          featured={tab === 'running'}
           badge={badges[tab] ?? 0}
           onPress={() => props.onSelect(tab)}
           onLongPress={props.onLongPressTab ? () => props.onLongPressTab!(tab) : undefined}
@@ -100,7 +99,6 @@ function TabButton(props: {
   icon: LucideIcon
   label: string
   selected: boolean
-  featured?: boolean
   badge: number
   onPress: () => void
   onLongPress?: () => void
@@ -108,12 +106,7 @@ function TabButton(props: {
   useMobileColorScheme()
   const [pressed, setPressed] = useState(false)
   const Icon = props.icon
-  const activeRunning = Boolean(props.featured && props.badge > 0)
-  const tint = props.selected
-    ? colors.textPrimary
-    : activeRunning
-      ? colors.statusAmber
-      : colors.textMuted
+  const tint = props.selected ? colors.textPrimary : colors.textMuted
   return (
     <Pressable
       style={styles.tab}
@@ -128,9 +121,7 @@ function TabButton(props: {
       {/* Press feedback on the glyph only, so the label never jitters. */}
       <Animated.View
         style={[
-          props.featured ? styles.featuredIcon : styles.icon,
-          props.featured && props.selected && styles.featuredIconSelected,
-          props.featured && !props.selected && activeRunning && styles.featuredIconLive,
+          styles.icon,
           {
             transform: [{ scale: pressed ? 0.88 : 1 }],
             transitionProperty: 'transform',
@@ -139,10 +130,13 @@ function TabButton(props: {
           }
         ]}
       >
-        <Icon size={props.featured ? 21 : 25} strokeWidth={props.selected ? 2.2 : 1.8} color={tint} />
+        <Icon size={25} strokeWidth={props.selected ? 2.2 : 1.8} color={tint} />
         {props.badge > 0 ? <TabBadge count={props.badge} /> : null}
       </Animated.View>
-      <Text style={[styles.label, { color: tint }]} numberOfLines={1}>
+      <Text
+        style={[styles.label, props.selected && styles.labelSelected, { color: tint }]}
+        numberOfLines={1}
+      >
         {props.label}
       </Text>
     </Pressable>
@@ -195,25 +189,8 @@ const styles = themedStyleSheet(() => ({
     paddingTop: 2
   },
   icon: { width: 30, height: 26, alignItems: 'center', justifyContent: 'center' },
-  featuredIcon: {
-    width: 44,
-    height: 28,
-    borderRadius: radii.pill,
-    backgroundColor: colors.bgPanel,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  featuredIconSelected: {
-    borderColor: colors.textPrimary,
-    backgroundColor: colors.bgPanel
-  },
-  featuredIconLive: {
-    borderColor: 'rgba(245, 158, 11, 0.55)',
-    backgroundColor: 'rgba(245, 158, 11, 0.14)'
-  },
   label: { fontSize: 10.5, fontWeight: '500', letterSpacing: 0.1 },
+  labelSelected: { fontWeight: '600' },
   badge: {
     position: 'absolute',
     top: -4,

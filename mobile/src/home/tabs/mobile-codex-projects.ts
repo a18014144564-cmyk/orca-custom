@@ -7,8 +7,8 @@ import type { RepoIcon } from '../../../../src/shared/repository/appearance/repo
 import type { WorkspaceLineage } from '../../../../src/shared/worktree/lineage-types'
 import {
   agentStatusGroup,
-  everyRow,
   hostAgents,
+  isBotOrWorkerWorktree,
   type AgentListRow
 } from '../../agents/agent-list-rows'
 import type { HostCatalogEntry } from '../../host-catalog/host-profile'
@@ -103,15 +103,12 @@ export function countMobilePlatformProjects(
 export function isExcludedMobileBotOrWorkerRow(
   row: Worktree,
   botHomeWorktreeIds: ReadonlySet<string>,
-  workspaceLineage?: Readonly<Record<string, WorkspaceLineage | undefined>>
+  workspaceLineage?: Readonly<Record<string, WorkspaceLineage | undefined>>,
+  allRows?: readonly Worktree[]
 ): boolean {
-  if (row.isArchived === true || row.botHome === true || Boolean(row.bot) || row.repo === 'Bots' || botHomeWorktreeIds.has(row.worktreeId)) {
-    return true
-  }
-  const lineage = workspaceLineage?.[row.worktreeId]
-  return Boolean(
-    lineage &&
-      (lineage.origin === 'orchestration' || lineage.capture?.source === 'bot-hand-over' || lineage.orchestrationRunId)
+  return (
+    row.isArchived === true ||
+    isBotOrWorkerWorktree(row.worktreeId, { rows: allRows ?? [row], workspaceLineage, botHomeWorktreeIds, excludeBotHomeSelf: true })
   )
 }
 
@@ -248,20 +245,14 @@ export function buildMobileCodexProjectsModel(args: {
   }
 
   for (const host of args.hosts) {
-    const hostAgentList = everyRow(
-      hostAgents({ hosts: args.hosts, hostStates: args.hostStates, worktreeInfo: safeWorktreeInfo, now }, host.id).roots
-    )
+    const hostAgentList = hostAgents({ hosts: args.hosts, hostStates: args.hostStates, worktreeInfo: safeWorktreeInfo, now }, host.id).roots
+    const info = args.worktreeInfo[host.id]
     for (const agentRow of hostAgentList) {
       const wtId = agentRow.entry.worktreeId
-      if (args.botHomeWorktreeIds.has(wtId) || agentRow.entry.bot) {
-        continue
-      }
+      if (agentRow.depth > 0 || args.botHomeWorktreeIds.has(wtId) || agentRow.entry.bot) { continue }
       const wtKey = `${host.id}::${wtId}`
-      if (validWorktreeKeys.size > 0 && !validWorktreeKeys.has(wtKey)) {
-        const rawRow = args.worktreeInfo[host.id]?.rows?.find((r) => r.worktreeId === wtId)
-        if (rawRow && isExcludedMobileBotOrWorkerRow(rawRow, args.botHomeWorktreeIds, args.worktreeInfo[host.id]?.workspaceLineage)) {
-          continue
-        }
+      if (validWorktreeKeys.size > 0 && !validWorktreeKeys.has(wtKey) && isBotOrWorkerWorktree(wtId, { rows: info?.rows, workspaceLineage: info?.workspaceLineage, botHomeWorktreeIds: args.botHomeWorktreeIds, excludeBotHomeSelf: true })) {
+        continue
       }
       worktreeKeysWithAgent.add(wtKey)
       const mark = markByWorktreeKey.get(wtKey) ?? {

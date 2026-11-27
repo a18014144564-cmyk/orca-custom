@@ -14,35 +14,114 @@ import {
   type AgentRowNode
 } from '../worktree/agent-lineage/agent-row-lineage'
 import { isBotGroupMemberSession } from '../../../src/shared/bots/bot-group'
+import { workspaceKeyOfRow } from '../../../src/shared/workspace/identity/workspace-scope'
+import type { WorkspaceLineage } from '../../../src/shared/worktree/lineage-types'
 import type { HomeAgentEntry, HostWorktreeInfo } from '../worktree/catalog/home-worktree-info'
+import type { Worktree } from '../worktree/workspace-list/workspace-list-types'
 import { agentListTitle } from './agent-list-row-text'
+
+function isWorkerLineageRecord(
+  lineage:
+    | Pick<WorkspaceLineage, 'origin' | 'capture' | 'orchestrationRunId' | 'taskId' | 'coordinatorHandle'>
+    | undefined
+): boolean {
+  if (!lineage) {
+    return false
+  }
+  return Boolean(
+    lineage.origin === 'orchestration' ||
+      lineage.capture?.source === 'bot-hand-over' ||
+      lineage.capture?.source === 'orchestration-context' ||
+      lineage.orchestrationRunId ||
+      lineage.taskId ||
+      lineage.coordinatorHandle
+  )
+}
+
+function stripWorkspacePrefix(key: string | null | undefined): string | null {
+  if (!key) {
+    return null
+  }
+  return key.startsWith('worktree:') ? key.slice('worktree:'.length) : key
+}
+
+export function isBotOrWorkerWorktree(
+  worktreeId: string,
+  opts: {
+    rows?: readonly Worktree[]
+    workspaceLineage?: Readonly<Record<string, WorkspaceLineage | undefined>>
+    botHomeWorktreeIds?: ReadonlySet<string>
+    excludeBotHomeSelf?: boolean
+  }
+): boolean {
+  const visited = new Set<string>()
+  let cur: string | null = worktreeId
+  for (let depth = 0; cur && depth < 8; depth += 1) {
+    if (visited.has(cur)) {
+      break
+    }
+    visited.add(cur)
+    const stripped = stripWorkspacePrefix(cur)
+    const isSelf = depth === 0
+    if (
+      (!isSelf || opts.excludeBotHomeSelf === true) &&
+      (opts.botHomeWorktreeIds?.has(cur) || Boolean(stripped && opts.botHomeWorktreeIds?.has(stripped)))
+    ) {
+      return true
+    }
+    const lineage: WorkspaceLineage | undefined =
+      opts.workspaceLineage?.[cur] ?? opts.workspaceLineage?.[workspaceKeyOfRow(cur)]
+    if (isWorkerLineageRecord(lineage)) {
+      return true
+    }
+    const row = opts.rows?.find(
+      (candidate) => candidate.worktreeId === cur || (stripped !== null && candidate.worktreeId === stripped)
+    )
+    if (row) {
+      if (isWorkerLineageRecord(row.crossStoreParent)) {
+        return true
+      }
+      if (!isSelf || opts.excludeBotHomeSelf === true) {
+        if (row.botHome === true || Boolean(row.bot) || row.repo === 'Bots') {
+          return true
+        }
+      } else if (row.bot && !row.botHome) {
+        return true
+      }
+    }
+    const nextParent: string | null =
+      lineage?.parentWorkspaceKey ??
+      row?.workspaceLineage?.parentWorkspaceKey ??
+      row?.parentWorktreeId ??
+      null
+    if (!nextParent || nextParent === cur) {
+      break
+    }
+    cur = nextParent
+  }
+  return false
+}
 
 function isTeamOrWorkerAgentEntry(
   entry: HomeAgentEntry,
   info: HostWorktreeInfo | undefined
 ): boolean {
   const { agent, worktreeId } = entry
+  const verdict = listedAgentVerdict(agent)
   if (
     agent.paneKey.includes('bot-group-member-') ||
     isBotGroupMemberSession(agent.orcaSessionId) ||
-    agent.parentPaneKey != null
+    agent.parentPaneKey != null ||
+    verdict?.childOf != null ||
+    verdict?.foldedChild === true
   ) {
     return true
   }
-  const lineage = info?.workspaceLineage?.[worktreeId]
-  if (
-    lineage &&
-    (lineage.origin === 'orchestration' ||
-      lineage.capture?.source === 'bot-hand-over' ||
-      Boolean(lineage.orchestrationRunId))
-  ) {
-    return true
-  }
-  const row = info?.rows?.find((candidate) => candidate.worktreeId === worktreeId)
-  if (row && row.bot && !row.botHome) {
-    return true
-  }
-  return false
+  return isBotOrWorkerWorktree(worktreeId, {
+    rows: info?.rows,
+    workspaceLineage: info?.workspaceLineage,
+    excludeBotHomeSelf: false
+  })
 }
 
 export type AgentStatusGroup = 'needs-you' | 'working' | 'done' | 'idle'
