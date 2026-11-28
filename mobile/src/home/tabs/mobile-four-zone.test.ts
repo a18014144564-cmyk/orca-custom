@@ -680,4 +680,97 @@ describe('mobile-four-zone', () => {
     expect(activeCount).toBe(2)
     expect(model.items.map((i) => i.title)).toEqual(['产品经理 Bot', '风神开发团队'])
   })
+
+  it('rolls mail/item-dispatched team member Home Chat turns up to the owning Bot Team instead of showing a standalone Bot card', () => {
+    const now = 40_000_000
+    const winHost = { id: 'win-1', name: 'DESKTOP-P3UU2A1', credentialStatus: 'paired' } as unknown as Parameters<typeof buildMobileRunningWindows>[0]['hosts'][number]
+    const botRows = [
+      {
+        key: 'place-1\ngroup:team-1',
+        placeKey: 'place-1',
+        kind: 'group' as const,
+        pairedHostId: 'win-1',
+        hostLabel: 'DESKTOP-P3UU2A1',
+        title: '风神开发团队',
+        preview: '大明白: 已交由风神开发手处理 Item #76',
+        needsYou: 0,
+        dot: null,
+        activityAt: now - 60 * 60_000,
+        unread: false,
+        group: {
+          id: 'team-1',
+          members: [{ botId: 'bot-dev', sessionId: 'bot-group-member-dev' }],
+          threads: []
+        }
+      },
+      {
+        key: 'place-1\nbot:bot-dev',
+        placeKey: 'place-1',
+        kind: 'bot' as const,
+        pairedHostId: 'win-1',
+        hostLabel: 'DESKTOP-P3UU2A1',
+        title: '风神开发手',
+        preview: 'mcp_agy-fast_fast_run_checks: ...',
+        line: { kind: 'activity' as const, place: null, text: 'mcp_agy-fast_fast_run_checks: ...', at: now - 1_000 },
+        needsYou: 0,
+        dot: 'working' as const,
+        activityAt: now - 1_000,
+        unread: false,
+        bot: { id: 'bot-dev', name: '风神开发手', chatSessionId: 'chat-dev-direct' }
+      }
+    ] as unknown as HomeBotRow[]
+
+    const worktreeInfo: Record<string, HostWorktreeInfo> = {
+      'win-1': {
+        hostId: 'win-1',
+        totalWorktrees: 1,
+        activeCount: 1,
+        rows: [],
+        agents: [
+          {
+            worktreeId: 'folder:bot-dev',
+            workspaceName: '风神开发手',
+            repo: 'Bots',
+            branch: '',
+            agent: {
+              paneKey: 'structured-agent-session-chat-dev-direct:chat-dev-direct',
+              orcaSessionId: 'chat-dev-direct',
+              parentPaneKey: null,
+              state: 'working',
+              prompt: '──── From: 大明白 (bot-group-member-lead) (handoff) ────\nSubject: New item: Item #76\nAn item was added for you: "Item #76".',
+              taskTitle: null,
+              displayName: null,
+              stateStartedAt: now - 10_000,
+              updatedAt: now - 1_000
+            }
+          }
+        ] as unknown as HostWorktreeInfo['agents']
+      }
+    }
+
+    const activeCount = countActiveMobileRunningWindows({
+      hosts: [winHost],
+      hostStates: { 'win-1': 'connected' },
+      worktreeInfo,
+      botRows,
+      botHomeWorktreeIds: new Set(['folder:bot-dev']),
+      now
+    })
+    const model = buildMobileRunningWindows({
+      hosts: [winHost],
+      winHostIds: new Set(['win-1']),
+      macHostIds: new Set(),
+      hostStates: { 'win-1': 'connected' },
+      worktreeInfo,
+      botRows,
+      botHomeWorktreeIds: new Set(['folder:bot-dev']),
+      prefs: { idleHideMs: 30 * 60_000, groupByDevice: false, dismissedAtByKey: {} },
+      now
+    })
+
+    expect(activeCount).toBe(1)
+    expect(model.items.map((i) => `${i.kind}:${i.title}:${i.status}:${i.subtitle}`)).toEqual([
+      'team:风神开发团队:working:风神开发手 正在执行团队任务'
+    ])
+  })
 })

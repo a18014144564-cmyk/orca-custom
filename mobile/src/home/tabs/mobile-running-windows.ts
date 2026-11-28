@@ -6,6 +6,7 @@ import type { HomeBotRow } from '../bots/home-bot-rows'
 import { formatMobileRelativeTime } from './mobile-codex-projects'
 import {
   collectTeamBotFilterContext,
+  collectTeamDelegatedActivity,
   isDispatchedOrTeamWorkerRow,
   resolveBotRowForRunning
 } from './mobile-running-filters'
@@ -112,7 +113,9 @@ export function summarizeActiveMobileRunningWindows(args: {
       topDevice = device
     }
   }
-  const { botSessionIds, teamMemberKeys } = collectTeamBotFilterContext(args.botRows)
+  const teamCtx = collectTeamBotFilterContext(args.botRows)
+  const { botSessionIds, teamMemberKeys } = teamCtx
+  const delegatedByTeam = collectTeamDelegatedActivity(args.botRows, args.worktreeInfo, teamCtx, now)
   const safeWorktreeInfo: Record<string, HostWorktreeInfo> = {}
   for (const host of args.hosts) {
     const info = args.worktreeInfo[host.id]
@@ -134,7 +137,7 @@ export function summarizeActiveMobileRunningWindows(args: {
     }
   }
   for (const row of args.botRows) {
-    const resolved = resolveBotRowForRunning(row, args.worktreeInfo, teamMemberKeys, now)
+    const resolved = resolveBotRowForRunning(row, args.worktreeInfo, teamMemberKeys, now, delegatedByTeam)
     if (resolved && (resolved.status === 'attention' || resolved.status === 'working')) {
       consider(resolved.status, row.title, row.hostLabel)
     }
@@ -165,7 +168,9 @@ export function buildMobileRunningWindows(args: {
   now?: number
 }): MobileRunningWindowsModel {
   const now = args.now ?? Date.now()
-  const { botSessionIds, teamMemberKeys } = collectTeamBotFilterContext(args.botRows)
+  const teamCtx = collectTeamBotFilterContext(args.botRows)
+  const { botSessionIds, teamMemberKeys } = teamCtx
+  const delegatedByTeam = collectTeamDelegatedActivity(args.botRows, args.worktreeInfo, teamCtx, now)
   const platformOf = (hostId: string): MobileRunningDevicePlatform =>
     args.winHostIds.has(hostId) ? 'win' : args.macHostIds.has(hostId) ? 'mac' : 'other'
 
@@ -208,7 +213,7 @@ export function buildMobileRunningWindows(args: {
   }
 
   for (const row of args.botRows) {
-    const resolved = resolveBotRowForRunning(row, args.worktreeInfo, teamMemberKeys, now)
+    const resolved = resolveBotRowForRunning(row, args.worktreeInfo, teamMemberKeys, now, delegatedByTeam)
     if (!resolved) { continue }
     const item: MobileRunningWindowItem = {
       key: `bot:${row.key}`,
