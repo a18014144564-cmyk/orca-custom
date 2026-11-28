@@ -13,7 +13,10 @@ import {
   flattenAgentRowLineage,
   type AgentRowNode
 } from '../worktree/agent-lineage/agent-row-lineage'
-import { isBotGroupMemberSession } from '../../../src/shared/bots/bot-group'
+import {
+  isAnyBotGroupMemberSession,
+  REMOTE_BOT_GROUP_MEMBER_SESSION_PREFIX
+} from '../../../src/shared/bots/bot-group'
 import { workspaceKeyOfRow } from '../../../src/shared/workspace/identity/workspace-scope'
 import type { WorkspaceLineage } from '../../../src/shared/worktree/lineage-types'
 import type { HomeAgentEntry, HostWorktreeInfo } from '../worktree/catalog/home-worktree-info'
@@ -110,7 +113,8 @@ function isTeamOrWorkerAgentEntry(
   const verdict = listedAgentVerdict(agent)
   if (
     agent.paneKey.includes('bot-group-member-') ||
-    isBotGroupMemberSession(agent.orcaSessionId) ||
+    agent.paneKey.includes(REMOTE_BOT_GROUP_MEMBER_SESSION_PREFIX) ||
+    isAnyBotGroupMemberSession(agent.orcaSessionId) ||
     agent.parentPaneKey != null ||
     verdict?.childOf != null ||
     verdict?.foldedChild === true

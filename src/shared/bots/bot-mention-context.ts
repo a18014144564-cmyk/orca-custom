@@ -9,7 +9,7 @@ import {
   type BotRosterServer
 } from '../bot-roster'
 import type { BotChatRow, BotChatUnreachable } from './bot-chat-row'
-import { isBotGroupMemberSession } from './bot-group'
+import { isAnyBotGroupMemberSession } from './bot-group'
 
 /** A chat pick's link scheme; an older Orca matches only `bot:`, so it never reads one as the bot alone. */
 export const BOT_CHAT_MENTION_PREFIX = 'bot-chat:'
@@ -56,7 +56,7 @@ export function botClientMentionToken(
 
 /** One of a bot's chats `@` offers: it takes mail now, isn't the asking chat, and isn't a group's. */
 export function botMentionOffersChat(row: BotChatRow): boolean {
-  return !row.closed && !row.self && !isBotGroupMemberSession(row.id)
+  return !row.closed && !row.self && !isAnyBotGroupMemberSession(row.id)
 }
 
 /** Chats whose title or second line holds every word typed, in list order; spaces separate words. */

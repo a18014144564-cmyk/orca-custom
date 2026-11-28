@@ -6,6 +6,7 @@ import { routeBotMail } from '../messaging/bot-chat-address'
 import { botAddressReach } from '../messaging/bot-recipient'
 import { pairedLabelComputer } from '../../../../../../shared/orchestration/mailbox/paired-sender-name'
 import { agentMessageSenderName } from '../../../../../../shared/agent-session/journal/agent-session-message-source'
+import { resolveRemoteBotGroupChat } from './peer-mail-remote-group-session'
 
 // Deliveries being admitted on this Orca, by message id.
 const admitting = new Set<string>()
@@ -65,6 +66,7 @@ export async function deliverPeerMailToBot(
   db.releaseBotRequest(params.messageId)
   admitting.add(params.messageId)
   try {
+    const targetChat = await resolveRemoteBotGroupChat(runtime, params, peerFingerprint)
     const routed = await routeBotMail(
       { runtime, orchestrationCaller: undefined, recordMutationReceipt: undefined },
       {
@@ -74,7 +76,7 @@ export async function deliverPeerMailToBot(
           type: params.type,
           priority: params.priority,
           threadId: params.threadId,
-          chat: params.chat,
+          chat: targetChat,
           item: params.item
         },
         attachments: params.attachments,

@@ -7,6 +7,7 @@ import {
   type ConnectorSource,
   type ExternalConversationLink
 } from '../connectors/external-conversation-link'
+import { REMOTE_BOT_GROUP_MEMBER_SESSION_PREFIX } from './bot-group'
 import type { BotListWait } from './bot-list-waits'
 import { newestBotActivity } from './bot-row-activity'
 import type { BotWorkspaceLiveCounts } from './bot-sidebar-workspaces'
@@ -105,6 +106,9 @@ export function selectBotRowLine<R>(
       continue
     }
     const paneKey = read.paneKey(row)
+    if (paneKey.includes(REMOTE_BOT_GROUP_MEMBER_SESSION_PREFIX)) {
+      continue
+    }
     const link = linkByPaneKey.get(paneKey)
     const sideChat = sideChatByPaneKey.get(paneKey)
     if (paneKey === chatPaneKey) {

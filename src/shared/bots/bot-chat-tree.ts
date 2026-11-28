@@ -1,5 +1,5 @@
 // A bot's chats with the workers each one started nested under it: the Activity panel's and sidebar's one list.
-import { isBotGroupMemberSession } from './bot-group'
+import { isAnyBotGroupMemberSession } from './bot-group'
 
 /** What a chat row's icon shows: Home Chat, an outside thread's mark, an automation or a side chat. */
 export type BotChatOrigin = 'home' | 'slack' | 'linear' | 'github' | 'automation' | 'side'
@@ -203,7 +203,7 @@ export function normalizeBotChatFolds(value: unknown): Record<string, BotChatFol
  *  to their Bot Team room, never to the individual bot's single-chat list or Home Chat. */
 export function botOwnChatTree<T extends BotChatTreeRead>(tree: T): T {
   const roomIds = new Set(
-    tree.chats.filter((chat) => isBotGroupMemberSession(chat.chatId)).map((chat) => chat.chatId)
+    tree.chats.filter((chat) => isAnyBotGroupMemberSession(chat.chatId)).map((chat) => chat.chatId)
   )
   if (roomIds.size === 0) {
     return tree

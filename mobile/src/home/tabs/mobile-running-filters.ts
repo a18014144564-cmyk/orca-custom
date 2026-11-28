@@ -1,7 +1,8 @@
 import { structuredAgentSessionStatusPaneKey } from '../../../../src/shared/agent-session/view/structured-agent-session-tab'
 import {
   botGroupSessionIds,
-  isBotGroupMemberSession
+  isAnyBotGroupMemberSession,
+  REMOTE_BOT_GROUP_MEMBER_SESSION_PREFIX
 } from '../../../../src/shared/bots/bot-group'
 import {
   agentStatusGroup,
@@ -60,7 +61,8 @@ export function isDispatchedOrTeamWorkerRow(
     listedAgentVerdict(agent)?.childOf != null ||
     listedAgentVerdict(agent)?.foldedChild === true ||
     agent.paneKey.includes('bot-group-member-') ||
-    isBotGroupMemberSession(agent.orcaSessionId)
+    agent.paneKey.includes(REMOTE_BOT_GROUP_MEMBER_SESSION_PREFIX) ||
+    isAnyBotGroupMemberSession(agent.orcaSessionId)
   ) {
     return true
   }
@@ -143,7 +145,8 @@ export function resolveBotRowForRunning(
   const directEntry = hostAgentsList?.find(({ agent }) => {
     if (
       agent.paneKey.includes('bot-group-member-') ||
-      isBotGroupMemberSession(agent.orcaSessionId) ||
+      agent.paneKey.includes(REMOTE_BOT_GROUP_MEMBER_SESSION_PREFIX) ||
+      isAnyBotGroupMemberSession(agent.orcaSessionId) ||
       agent.parentPaneKey != null ||
       listedAgentVerdict(agent)?.childOf != null
     ) {

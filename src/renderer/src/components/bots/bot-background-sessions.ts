@@ -11,7 +11,11 @@ import type { StructuredAgentSessionStatusChange } from '@/runtime/native-chat/s
 import type { AgentSessionStatusSummary } from '../../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionStatusSnapshot } from '../../../../shared/agent-session/view/agent-session-status-snapshot-fold'
 import type { Bot } from '../../../../shared/bot-types'
-import { isBotGroupMemberSession, type BotGroup } from '../../../../shared/bots/bot-group'
+import {
+  isBotGroupMemberSession,
+  isRemoteBotGroupMemberSession,
+  type BotGroup
+} from '../../../../shared/bots/bot-group'
 import { isStructuredAgentId } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
@@ -75,7 +79,7 @@ function botSessionStandIn(
       tabbed = new Set((unifiedTabsByWorktree[workspaceId] ?? []).map((tab) => tab.entityId))
       opened.set(workspaceId, tabbed)
     }
-    if (tabbed.has(sessionId)) {
+    if (tabbed.has(sessionId) || isRemoteBotGroupMemberSession(sessionId)) {
       return null
     }
     return isBotGroupMemberSession(sessionId)

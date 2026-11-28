@@ -23,7 +23,7 @@ import {
   workerRowIsRunning
 } from './bot-activity-recorded-workers'
 import { handedAgentRows, type BotHandedAgentObservation } from './bot-activity-handed-agents'
-import { isBotGroupMemberSession } from './bot-group'
+import { isAnyBotGroupMemberSession } from './bot-group'
 import type { BotUpNext } from './bot-look-around'
 import { pendingWaits, waitDueAt } from '../automation-once'
 
@@ -244,7 +244,7 @@ export function buildBotActivity(input: BotActivityInput): BotActivity {
     originByPaneKey.set(link.paneKey, { kind: 'thread', source: link.source })
   }
   for (const session of input.sessions) {
-    if (!isBotGroupMemberSession(session.sessionId) && (session.sessionId === input.bot.chatSessionId || !originByPaneKey.has(session.paneKey))) {
+    if (!isAnyBotGroupMemberSession(session.sessionId) && (session.sessionId === input.bot.chatSessionId || !originByPaneKey.has(session.paneKey))) {
       originByPaneKey.set(session.paneKey, sessionOrigin(input, session, automationBySessionId))
     }
   }

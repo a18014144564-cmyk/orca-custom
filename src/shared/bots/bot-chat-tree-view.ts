@@ -8,7 +8,7 @@ import {
 } from './bot-chat-tree'
 import { CONNECTOR_SOURCE_NAMES } from '../connectors/external-conversation-link'
 import type { BotChatSearchResult } from './bot-chat-search'
-import { isBotGroupMemberSession } from './bot-group'
+import { isAnyBotGroupMemberSession } from './bot-group'
 
 /** A chat a search found; `matches` lists only the workers that hit when the chat itself didn't. */
 export type BotChatSearchHit = { chat: BotChatTreeChat; matches: ReadonlySet<string> | null }
@@ -124,7 +124,7 @@ export function botChatSearchHits(
   const byId = new Map(own.chats.map((chat) => [chat.chatId, chat]))
   const hits = new Map<string, ReadonlySet<string> | null>()
   for (const match of result.matches) {
-    if (isBotGroupMemberSession(match.chatId)) {
+    if (isAnyBotGroupMemberSession(match.chatId)) {
       continue
     }
     const chatId = match.chatId

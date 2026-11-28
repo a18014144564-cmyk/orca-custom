@@ -1,4 +1,5 @@
 // One Home row per bot or room: drawn live from its computer's answer, or kept from its last one.
+import { isRemoteBotGroupMemberSession, REMOTE_BOT_GROUP_MEMBER_SESSION_PREFIX } from '../../../../src/shared/bots/bot-group'
 import type { BotGroup } from '../../../../src/shared/bots/bot-group-schema'
 import { botGroupStatusOf } from '../../../../src/shared/bots/bot-group-status'
 import { foldBotStatus, type BotRowStatus } from '../../../../src/shared/bots/bot-row-status'
@@ -161,7 +162,8 @@ export function botRow(
       itemsNeedingYou: (answer.needsYou[bot.id] ?? 0) + access
     }
   }
-  const rows = agents.map((entry) => entry.agent)
+  const ownAgents = agents.filter(({ agent }) => !isRemoteBotGroupMemberSession(agent.orcaSessionId) && !agent.paneKey.includes(REMOTE_BOT_GROUP_MEMBER_SESSION_PREFIX))
+  const rows = ownAgents.map((entry) => entry.agent)
   const line = mobileBotRowLine(facts, rows, now)
   const lineAt = line?.kind === 'activity' ? line.at : null
   const needsYou = mobileBotRowNeedsYou(facts.line, rows, now)
@@ -177,7 +179,7 @@ export function botRow(
     hostLabel: place.hostLabel,
     title: bot.name,
     bot,
-    dot: botDot(agents, bot.paused, now),
+    dot: botDot(ownAgents, bot.paused, now),
     line,
     asking,
     preview: asking
@@ -191,7 +193,7 @@ export function botRow(
         ? mobileBotRowLineText(line, now)
         : '',
     age: lineAt === null ? null : formatTimeAgo(lineAt, now),
-    unread: agents.some((entry) => listedAgentVerdict(entry.agent)?.unread === true),
+    unread: ownAgents.some((entry) => listedAgentVerdict(entry.agent)?.unread === true),
     needsYou,
     activityAt: Math.max(lineAt ?? 0, ...rows.map(agentRowTimeAt))
   }

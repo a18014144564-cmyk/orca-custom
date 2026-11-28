@@ -2,7 +2,7 @@ import {
   orcaChatGroupDeleteReason,
   useOrcaChatDeleteHostReason
 } from '@/lib/agent-session/chat-deletion/orca-chat-delete'
-import { isBotGroupMemberSession } from '../../../../../../shared/bots/bot-group'
+import { isAnyBotGroupMemberSession } from '../../../../../../shared/bots/bot-group'
 import { isAntigravityReferenceSession } from '../../../../../../shared/agent-session/lifecycle/provider-handles/antigravity-session-origin'
 import type { AiVaultSubagentResumeActions } from './AiVaultSessionSubagents'
 import { useCallback } from 'react'
@@ -126,7 +126,7 @@ export function VaultSessionRow({
   // An Orca chat is deleted by the host that owns it; the agent's own transcript stays.
   const deleteBlockedReason = session.structuredSession
     ? onRequestDelete
-      ? isBotGroupMemberSession(session.structuredSession.sessionId)
+      ? isAnyBotGroupMemberSession(session.structuredSession.sessionId)
         ? orcaChatGroupDeleteReason(t)
         : chatDeleteHostReason
       : t(

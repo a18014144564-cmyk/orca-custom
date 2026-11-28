@@ -1,7 +1,7 @@
 // A bot's chat search over everything its host holds: every chat by title, place and last message,
 // and every worker by title. Pure, so the host runs it and a test can time it.
 import type { BotChatTreeChat } from './bot-chat-tree'
-import { isBotGroupMemberSession } from './bot-group'
+import { isAnyBotGroupMemberSession } from './bot-group'
 
 /** Chat blocks a search returns at most; the rest only count. */
 export const BOT_CHAT_SEARCH_LIMIT = 30
@@ -64,7 +64,7 @@ export function matchBotChats(
   for (const chat of chats) {
     // A group room session is its room's, not one of the bot's chats: only its workers match.
     const own =
-      !isBotGroupMemberSession(chat.chatId) &&
+      !isAnyBotGroupMemberSession(chat.chatId) &&
       (hit(chat.title) ||
         hit(chat.originLabel) ||
         hit(chat.preview) ||

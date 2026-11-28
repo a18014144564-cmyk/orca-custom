@@ -101,10 +101,12 @@ export function botGroupRoomMembers(
   return [group.members, ...(group.threads ?? []).map((thread) => thread.members)]
 }
 
-/** A group member's own native session, as opposed to Home or any other chat. */
-export function isBotGroupMemberSession(sessionId: string | null | undefined): sessionId is string {
-  return sessionId?.startsWith('bot-group-member-') === true
-}
+export {
+  isAnyBotGroupMemberSession,
+  isBotGroupMemberSession,
+  isRemoteBotGroupMemberSession,
+  REMOTE_BOT_GROUP_MEMBER_SESSION_PREFIX
+} from './bot-group-session-id'
 
 /** A remote member's id in mentions and reply audiences: bot ids are unique only per computer. */
 export const botGroupRemoteKey = remoteMemberKey

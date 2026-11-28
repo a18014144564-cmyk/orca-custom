@@ -14,7 +14,7 @@ import { usePublishBotNeedsYou } from './bot-needs-you-published'
 import { structuredAgentSessionStatusPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-tab'
 import { useBotActivity } from './use-bot-activity'
 import { useBotChatTree } from './use-bot-chat-tree'
-import { isBotGroupMemberSession } from '../../../../shared/bots/bot-group'
+import { isAnyBotGroupMemberSession } from '../../../../shared/bots/bot-group'
 import { useBotConnectorEntries, type BotConnectorEntry } from './bot-connector-entries'
 import { usePairedServerAsks } from './use-paired-server-asks'
 
@@ -37,7 +37,7 @@ export function useBotNow(bot: Bot | null): BotNowView {
         chat.origin === 'side' &&
         chat.live === 'needs-you' &&
         !chat.closed &&
-        !isBotGroupMemberSession(chat.chatId)
+        !isAnyBotGroupMemberSession(chat.chatId)
           ? [{ sessionId: chat.chatId, title: chat.title }]
           : []
       ),

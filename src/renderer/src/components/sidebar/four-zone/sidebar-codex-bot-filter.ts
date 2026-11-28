@@ -1,5 +1,10 @@
 import type { Bot } from '../../../../../shared/bot-types'
-import { botGroupSessionIds, isBotGroupMemberSession, type BotGroup } from '../../../../../shared/bots/bot-group'
+import {
+  botGroupSessionIds,
+  isAnyBotGroupMemberSession,
+  REMOTE_BOT_GROUP_MEMBER_SESSION_PREFIX,
+  type BotGroup
+} from '../../../../../shared/bots/bot-group'
 import {
   structuredAgentSessionTabId
 } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
@@ -59,11 +64,14 @@ export function isExcludedBotSessionTabId(
   if (!tabId) {
     return false
   }
-  if (tabId.includes('bot-group-member-')) {
+  if (
+    tabId.includes('bot-group-member-') ||
+    tabId.includes(REMOTE_BOT_GROUP_MEMBER_SESSION_PREFIX)
+  ) {
     return true
   }
   const sessionId = extractSessionIdFromTabOrPane(tabId)
-  if (sessionId && (isBotGroupMemberSession(sessionId) || excludedBotSessionIds.has(sessionId))) {
+  if (sessionId && (isAnyBotGroupMemberSession(sessionId) || excludedBotSessionIds.has(sessionId))) {
     return true
   }
   for (const id of excludedBotSessionIds) {
@@ -132,6 +140,7 @@ export function isExcludedBotOrTeamThread(
   }
   if (
     thread.paneKey.includes('bot-group-member-') ||
+    thread.paneKey.includes(REMOTE_BOT_GROUP_MEMBER_SESSION_PREFIX) ||
     isExcludedBotSessionTabId(thread.tab?.id, ctx.excludedBotSessionIds)
   ) {
     return true
@@ -139,7 +148,7 @@ export function isExcludedBotOrTeamThread(
   const sessionId = extractSessionIdFromTabOrPane(thread.tab?.id, thread.paneKey)
   if (
     sessionId &&
-    (isBotGroupMemberSession(sessionId) || ctx.excludedBotSessionIds.has(sessionId))
+    (isAnyBotGroupMemberSession(sessionId) || ctx.excludedBotSessionIds.has(sessionId))
   ) {
     return true
   }
