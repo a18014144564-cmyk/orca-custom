@@ -11,6 +11,7 @@ import {
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { Pressable, ScrollView, Text, View } from 'react-native'
 import type { AgentListRow } from '../../agents/agent-list-rows'
+import { botHomeWorktreeId } from '../../bots/host-bots-read'
 import { ActionSheetModal } from '../../components/sheets/ActionSheetModal'
 import type { HostCatalogEntry } from '../../host-catalog/host-profile'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
@@ -19,6 +20,7 @@ import { triggerMediumImpact } from '../../platform/haptics/haptics'
 import { colors } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { HomeBotRow } from '../bots/home-bot-rows'
+import type { FoldableStageTarget } from '../foldable/foldable-stage-types'
 import type { MobileHomeData } from '../use-mobile-home-data'
 import { collectBotHomeWorktreeIds } from './mobile-four-zone'
 import { mobileRunningStyles as styles } from './mobile-running-styles'
@@ -38,16 +40,45 @@ import { MobileHomeTabHeader, MobileHomeTabHeaderButton } from './MobileHomeTabH
 
 const KIND_LABELS = { project: '项目', bot: 'Bot', team: '团队' } as const
 
+function isRunningItemSelected(
+  item: MobileRunningWindowItem,
+  target: FoldableStageTarget | null | undefined
+): boolean {
+  if (!target || target.hostId !== item.hostId) {
+    return false
+  }
+  if (item.kind === 'team' && item.botRow?.kind === 'group') {
+    return target.kind === 'group' && target.groupId === item.botRow.group.id
+  }
+  if (item.kind === 'bot' && item.botRow?.kind === 'bot') {
+    return (
+      target.kind === 'session' &&
+      target.source === 'bot' &&
+      target.worktreeId === botHomeWorktreeId(item.botRow.bot)
+    )
+  }
+  if (item.kind === 'project' && item.agentRow) {
+    if (target.kind !== 'session') {
+      return false
+    }
+    if (target.paneKey && item.agentRow.entry.agent.paneKey) {
+      return target.paneKey === item.agentRow.entry.agent.paneKey
+    }
+    return target.worktreeId === item.agentRow.entry.worktreeId
+  }
+  return false
+}
+
 const RunningWindowCard = memo(function RunningWindowCard(props: {
   item: MobileRunningWindowItem
   now: number
   showDeviceBadge: boolean
+  selected?: boolean
   onPress: (item: MobileRunningWindowItem) => void
   onLongPress: (item: MobileRunningWindowItem) => void
 }) {
   useMobileColorScheme()
   const { item } = props
-  const isRunning = item.status === 'working' || item.status === 'attention'
   const DeviceIcon =
     item.platform === 'win' ? Monitor : item.platform === 'mac' ? Laptop : Server
   const deviceBadgeStyle =
@@ -86,12 +117,13 @@ const RunningWindowCard = memo(function RunningWindowCard(props: {
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityState={{ selected: props.selected === true }}
       accessibilityLabel={`${item.deviceName}，${item.title}`}
       onPress={() => props.onPress(item)}
       onLongPress={() => props.onLongPress(item)}
       style={({ pressed }) => [
         styles.card,
-        isRunning && styles.cardRunning,
+        props.selected && styles.cardSelected,
         pressed && styles.cardPressed
       ]}
     >
@@ -137,6 +169,7 @@ export function MobileHomeRunningTab(props: {
   winHosts: readonly HostCatalogEntry[]
   macHosts: readonly HostCatalogEntry[]
   bottomInset: number
+  selectedTarget?: FoldableStageTarget | null
   onOpenAgent: (row: AgentListRow) => void
   onOpenBot: (row: HomeBotRow) => void
   onOpenSettings: () => void
@@ -317,6 +350,7 @@ export function MobileHomeRunningTab(props: {
                       item={item}
                       now={now}
                       showDeviceBadge={false}
+                      selected={isRunningItemSelected(item, props.selectedTarget)}
                       onPress={handleOpenItem}
                       onLongPress={handleLongPressItem}
                     />
@@ -329,6 +363,7 @@ export function MobileHomeRunningTab(props: {
                   item={item}
                   now={now}
                   showDeviceBadge
+                  selected={isRunningItemSelected(item, props.selectedTarget)}
                   onPress={handleOpenItem}
                   onLongPress={handleLongPressItem}
                 />

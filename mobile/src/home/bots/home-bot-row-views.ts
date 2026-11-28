@@ -1,5 +1,5 @@
 // One Home row per bot or room: drawn live from its computer's answer, or kept from its last one.
-import { isRemoteBotGroupMemberSession, REMOTE_BOT_GROUP_MEMBER_SESSION_PREFIX } from '../../../../src/shared/bots/bot-group'
+import { isAnyBotGroupMemberSession, REMOTE_BOT_GROUP_MEMBER_SESSION_PREFIX } from '../../../../src/shared/bots/bot-group'
 import type { BotGroup } from '../../../../src/shared/bots/bot-group-schema'
 import { botGroupStatusOf } from '../../../../src/shared/bots/bot-group-status'
 import { foldBotStatus, type BotRowStatus } from '../../../../src/shared/bots/bot-row-status'
@@ -162,7 +162,7 @@ export function botRow(
       itemsNeedingYou: (answer.needsYou[bot.id] ?? 0) + access
     }
   }
-  const ownAgents = agents.filter(({ agent }) => !isRemoteBotGroupMemberSession(agent.orcaSessionId) && !agent.paneKey.includes(REMOTE_BOT_GROUP_MEMBER_SESSION_PREFIX))
+  const ownAgents = agents.filter(({ agent }) => !isAnyBotGroupMemberSession(agent.orcaSessionId) && !agent.paneKey.includes('bot-group-member-') && !agent.paneKey.includes(REMOTE_BOT_GROUP_MEMBER_SESSION_PREFIX))
   const rows = ownAgents.map((entry) => entry.agent)
   const line = mobileBotRowLine(facts, rows, now)
   const lineAt = line?.kind === 'activity' ? line.at : null

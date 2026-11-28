@@ -81,16 +81,37 @@ function shouldKeepWindow(
   return now - item.lastActivityAt < prefs.idleHideMs
 }
 
-export function countActiveMobileRunningWindows(args: {
+export type ActiveMobileRunningSummary = Readonly<{
+  activeCount: number
+  attentionCount: number
+  topTitle: string
+  topDevice: string
+}>
+
+export function summarizeActiveMobileRunningWindows(args: {
   hosts: readonly HostCatalogEntry[]
   hostStates: Readonly<Record<string, ConnectionState>>
   worktreeInfo: Readonly<Record<string, HostWorktreeInfo | undefined>>
   botRows: readonly HomeBotRow[]
   botHomeWorktreeIds: ReadonlySet<string>
   now?: number
-}): number {
+}): ActiveMobileRunningSummary {
   const now = args.now ?? Date.now()
-  let count = 0
+  let activeCount = 0
+  let attentionCount = 0
+  let topRank = -1
+  let topTitle = ''
+  let topDevice = ''
+  const consider = (status: 'attention' | 'working', title: string, device: string) => {
+    activeCount += 1
+    if (status === 'attention') { attentionCount += 1 }
+    const rank = status === 'attention' ? 2 : 1
+    if (rank > topRank) {
+      topRank = rank
+      topTitle = title
+      topDevice = device
+    }
+  }
   const { botSessionIds, teamMemberKeys } = collectTeamBotFilterContext(args.botRows)
   const safeWorktreeInfo: Record<string, HostWorktreeInfo> = {}
   for (const host of args.hosts) {
@@ -109,16 +130,27 @@ export function countActiveMobileRunningWindows(args: {
       }
       const group = agentStatusGroup(agentRow.dotState)
       if (group !== 'working' && group !== 'needs-you') { continue }
-      count += 1
+      consider(group === 'needs-you' ? 'attention' : 'working', agentRow.title, host.name)
     }
   }
   for (const row of args.botRows) {
     const resolved = resolveBotRowForRunning(row, args.worktreeInfo, teamMemberKeys, now)
     if (resolved && (resolved.status === 'attention' || resolved.status === 'working')) {
-      count += 1
+      consider(resolved.status, row.title, row.hostLabel)
     }
   }
-  return count
+  return { activeCount, attentionCount, topTitle, topDevice }
+}
+
+export function countActiveMobileRunningWindows(args: {
+  hosts: readonly HostCatalogEntry[]
+  hostStates: Readonly<Record<string, ConnectionState>>
+  worktreeInfo: Readonly<Record<string, HostWorktreeInfo | undefined>>
+  botRows: readonly HomeBotRow[]
+  botHomeWorktreeIds: ReadonlySet<string>
+  now?: number
+}): number {
+  return summarizeActiveMobileRunningWindows(args).activeCount
 }
 
 export function buildMobileRunningWindows(args: {

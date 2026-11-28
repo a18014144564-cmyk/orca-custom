@@ -12,6 +12,7 @@ import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import { MobileNativeChatReasoningBody } from '../message-content/MobileNativeChatReasoningRow'
 import { MobileNativeChatRowOverlaysContext } from '../message-actions/mobile-native-chat-row-overlays'
 import type { MobileNativeChatLiveLine as LiveLine } from '../turn-state/use-mobile-native-chat-turn-disclosure'
+import { useMobileChatDisplayPrefs } from '../../chat-display-prefs'
 
 // Keep the clock in the turn bar; the live line may disclose reasoning whose standalone row is hidden.
 export function MobileNativeChatLiveLine({
@@ -25,7 +26,9 @@ export function MobileNativeChatLiveLine({
 }): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
-  const { reasoning, reasoningExpanded } = line
+  const { showReasoning } = useMobileChatDisplayPrefs()
+  const reasoning = showReasoning ? line.reasoning : null
+  const { reasoningExpanded } = line
   const open = reasoning !== null && reasoningExpanded
   const label = formatMobileNativeChatActiveTurnLabel(line, t)
   // Android has no inline selection; the finished row's long-press sheet copies the live text too.

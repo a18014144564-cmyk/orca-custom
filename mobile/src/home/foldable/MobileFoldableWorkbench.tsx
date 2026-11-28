@@ -338,6 +338,7 @@ export function MobileFoldableWorkbench(props: {
                 winHosts={props.winHosts}
                 macHosts={props.macHosts}
                 bottomInset={16}
+                selectedTarget={stageTarget}
                 onOpenAgent={handleOpenAgentInStage}
                 onOpenBot={handleOpenBotInStage}
                 onOpenSettings={props.onOpenSettings}

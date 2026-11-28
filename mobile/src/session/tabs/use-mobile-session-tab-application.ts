@@ -32,7 +32,7 @@ import { activateMobileSessionTab } from './mobile-session-tab-activation'
 import { releaseTerminalCreateLock } from '../../terminal/session/creation/terminal-create-lock'
 import { withSessionTabStatusReceipts } from './mobile-session-tab-status-clock'
 import { withRememberedNativeChatIdentity } from '../native-chat/conversation/mobile-native-chat-eligibility'
-import type { MobileSessionTab, SessionTabsResult } from './mobile-session-tabs'
+import { isTeamGroupMemberTab, type MobileSessionTab, type SessionTabsResult } from './mobile-session-tabs'
 import type { MobileSessionTerminalListModel } from '../../terminal/session/inventory/use-mobile-session-terminal-list'
 import { pruneMobileNativeChatTabDrafts } from '../native-chat/composer/drafts/mobile-native-chat-draft-store'
 import {
@@ -92,7 +92,7 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
           now
         ),
         sessionTabsRef.current
-      )
+      ).filter((tab) => !isTeamGroupMemberTab(tab))
       const currentSessionTabs = sessionTabsRef.current
       const orphanedDraftTabs = orphanedMarkdownDraftTabs(
         nextTabs,

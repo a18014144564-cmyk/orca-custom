@@ -48,8 +48,10 @@ export const mobileRunningStyles = themedStyleSheet(() => ({
     paddingVertical: spacing.sm + 2,
     gap: 6
   },
-  cardRunning: {
-    borderColor: 'rgba(245, 158, 11, 0.45)'
+  cardSelected: {
+    borderColor: '#3b82f6',
+    borderWidth: 1.5,
+    backgroundColor: 'rgba(59, 130, 246, 0.14)'
   },
   cardPressed: { opacity: 0.78 },
   cardMetaRow: {

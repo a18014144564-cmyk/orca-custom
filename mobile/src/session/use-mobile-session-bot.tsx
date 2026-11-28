@@ -101,13 +101,7 @@ export function useMobileSessionBot(
           ? [agentDotState(tab.chatStatus, now)]
           : []
     )
-    const status =
-      routeBot.listStatus ??
-      botStatusFromDots(
-        homeDots,
-        (routeBot.activity?.workers ?? []).map((row) => row.dot),
-        routeBot.bot.paused
-      )
+    const status = botStatusFromDots(homeDots, [], routeBot.bot.paused)
     return { status, line: botStatusLine(status, routeBot.bot.paused, t) }
   }, [routeBot, visibleTabs, now, t])
 

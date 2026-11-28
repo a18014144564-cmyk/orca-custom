@@ -1,7 +1,12 @@
 import type { ReactNode } from 'react'
-import { ArrowUpDown, Bot as BotIcon, Users } from 'lucide-react-native'
+import { ArrowUpDown, Bot as BotIcon, Brain, Users, Wrench } from 'lucide-react-native'
 import type { ActionSheetAction } from '../components/sheets/ActionSheetModal'
 import type { useMobileTranslation } from '../i18n/use-mobile-translation'
+import {
+  getMobileChatDisplayPrefs,
+  toggleMobileChatReasoning,
+  toggleMobileChatToolDetails
+} from '../session/native-chat/chat-display-prefs'
 
 type Translate = ReturnType<typeof useMobileTranslation>
 
@@ -62,9 +67,27 @@ export function botGroupMenuActions(input: {
   newThread?: { renderIcon: () => ReactNode; disabled: boolean; onPress: () => void }
   onManageMembers: () => void
   onDelete: (() => void) | null
+  includeDisplayToggles?: boolean
 }): ActionSheetAction[] {
-  const { t, newThread, onDelete } = input
+  const { t, newThread, onDelete, includeDisplayToggles } = input
+  const display = includeDisplayToggles ? getMobileChatDisplayPrefs() : null
   return [
+    ...(display
+      ? [
+          {
+            label: '过程思考',
+            icon: Brain,
+            status: display.showReasoning ? '已开启' : '已关闭',
+            onPress: toggleMobileChatReasoning
+          },
+          {
+            label: '工具调用详情',
+            icon: Wrench,
+            status: display.showToolDetails ? '已显示' : '已隐藏',
+            onPress: toggleMobileChatToolDetails
+          }
+        ]
+      : []),
     ...(newThread
       ? [
           {

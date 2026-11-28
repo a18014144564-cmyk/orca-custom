@@ -120,6 +120,7 @@
       "./plugins/android-optional-hardware-features.js",
       "./plugins/android-window-density.js",
       "./plugins/android-foldable-continuity.js",
+      "./plugins/android-live-status-capsule.js",
       "./plugins/android-release-signing.js",
       "./plugins/android-navigation-bar-theme.js",
       "./plugins/android-device-transfer-rules.js",

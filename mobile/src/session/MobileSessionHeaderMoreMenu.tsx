@@ -2,12 +2,14 @@ import type { RefObject } from 'react'
 import type { HostInstance } from 'react-native'
 import {
   ALargeSmall,
+  Brain,
   Columns2,
   Folder,
   GitBranch,
   ListChecks,
   Plus,
-  SquareChevronRight
+  SquareChevronRight,
+  Wrench
 } from 'lucide-react-native'
 import { MobileAgentSessionHistoryIcon } from '../agent-history/MobileAgentSessionHistoryIcon'
 import type { ActionSheetAction } from '../components/sheets/ActionSheetModal'
@@ -17,6 +19,11 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { getMobileNativeChatCliForkActions } from './native-chat/history/mobile-native-chat-cli-fork'
+import {
+  toggleMobileChatReasoning,
+  toggleMobileChatToolDetails,
+  useMobileChatDisplayPrefs
+} from './native-chat/chat-display-prefs'
 import { useWorkspaceOnPairedHost } from '../navigation/workspace-execution-host'
 
 type Props = {
@@ -122,7 +129,26 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
     : activeSessionTab?.type === 'terminal'
       ? 'terminal'
       : null
+  const displayPrefs = useMobileChatDisplayPrefs()
   const view: ActionSheetAction[] = [
+    ...(showNativeChat
+      ? [
+          {
+            id: 'chatReasoning',
+            label: '过程思考',
+            status: displayPrefs.showReasoning ? '已开启' : '已关闭',
+            icon: Brain,
+            onPress: toggleMobileChatReasoning
+          },
+          {
+            id: 'chatToolDetails',
+            label: '工具调用详情',
+            status: displayPrefs.showToolDetails ? '已显示' : '已隐藏',
+            icon: Wrench,
+            onPress: toggleMobileChatToolDetails
+          }
+        ]
+      : []),
     ...(canSplitTerminals || terminalSplitActive
       ? [
           {

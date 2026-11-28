@@ -23,7 +23,8 @@ import {
   type MobileHomeLayoutMode,
   type MobileProjectsPlatform
 } from './mobile-four-zone'
-import { countActiveMobileRunningWindows } from './mobile-running-windows'
+import { syncAndroidLiveStatusCapsule } from '../../notifications/android-live-status-capsule'
+import { summarizeActiveMobileRunningWindows } from './mobile-running-windows'
 import {
   loadMobileFourZoneTabOrder,
   normalizeMobileFourZoneTabOrder,
@@ -159,9 +160,9 @@ export function useMobileFourZoneHome(data: MobileHomeData) {
     () => collectBotHomeWorktreeIds(data.bots.rows),
     [data.bots.rows]
   )
-  const runningBadge = useMemo(
+  const runningSummary = useMemo(
     () =>
-      countActiveMobileRunningWindows({
+      summarizeActiveMobileRunningWindows({
         hosts: data.sortedHostCatalog,
         hostStates: data.hostStates,
         worktreeInfo: data.worktreeInfo,
@@ -170,6 +171,11 @@ export function useMobileFourZoneHome(data: MobileHomeData) {
       }),
     [botHomeWorktreeIds, data.bots.rows, data.hostStates, data.sortedHostCatalog, data.worktreeInfo]
   )
+  const runningBadge = runningSummary.activeCount
+
+  useEffect(() => {
+    void syncAndroidLiveStatusCapsule(runningSummary)
+  }, [runningSummary])
 
   useEffect(() => {
     if (!platformLoaded || !data.hostCatalogLoaded) {

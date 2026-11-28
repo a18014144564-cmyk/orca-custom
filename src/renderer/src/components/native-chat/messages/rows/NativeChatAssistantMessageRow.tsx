@@ -23,6 +23,7 @@ import { NativeChatForkAction } from '../actions/NativeChatForkAction'
 import type { useNativeChatWorkRun } from '../../tools/runs/use-native-chat-work-run'
 import { useTranslate } from '@/i18n/use-translate'
 import { NativeChatGalleryMessageContext } from '../../media/images/gallery/native-chat-image-gallery-context'
+import { useDesktopChatDisplayPrefs } from '../../chat-display-prefs'
 
 function messageIsStreaming(
   message: NativeChatMessage,
@@ -49,7 +50,7 @@ export function NativeChatAssistantMessageRow({
   run: ReturnType<typeof useNativeChatWorkRun>
   rowRef: React.RefObject<HTMLDivElement | null>
   scrollToTop: () => void
-}): React.JSX.Element {
+}): React.JSX.Element | null {
   const t = useTranslate()
   const {
     message,
@@ -63,13 +64,15 @@ export function NativeChatAssistantMessageRow({
     fork
   } = props
   const { prose, hasImages } = content
-  const toolRun = toolRunProps(props, content, run)
+  const { showToolDetails } = useDesktopChatDisplayPrefs()
+  const toolRun = showToolDetails ? toolRunProps(props, content, run) : null
   const isSystem = message.role === 'system'
   // The same words slot construction chooses the turn's action holder by; Copy needs them.
   const words = nativeChatAgentRowWords(message, t)
   const streaming = messageIsStreaming(message, activeTurnIsWorking, trailingRun)
   const inBotHome = useBotForWorkspace(useNativeChatVisualOwner()?.worktreeId ?? null) !== null
   const inBotChat = useContext(NativeChatBotAnswerContext) || inBotHome
+  const inSheet = useContext(NativeChatInSubagentSheet)
   const quiet = quietBotAnswer(words, {
     botAnswer: inBotChat && message.role === 'assistant',
     streaming,
@@ -77,10 +80,12 @@ export function NativeChatAssistantMessageRow({
     inActingTurn: props.inActingTurn === true
   })
   const shownWords = withLegacyNativeChatIdeasAsList(quiet.words)
+  if (!shownWords && !hasImages && !quiet.nothingToReport && !toolRun) {
+    return null
+  }
   // Hide controls on system asides and the still-working frontier, where more content may arrive. In
   // a turn they belong to its holder, which may draw only images when folding hid its words.
   // A subagent's sheet is read-only history: its rows offer no turn actions.
-  const inSheet = useContext(NativeChatInSubagentSheet)
   const showControls =
     !isSystem &&
     !inSheet &&

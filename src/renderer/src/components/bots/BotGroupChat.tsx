@@ -38,6 +38,7 @@ import { BotGroupRemoteAsk } from './BotGroupRemoteAsk'
 import { BotGroupTranscriptRows, useBotGroupTranscriptRows } from './bot-group-transcript-rows'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { BotGroupApprovalDock } from './BotGroupApprovalDock'
+import { ChatDisplayToggleBar } from '../native-chat/ChatDisplayToggleBar'
 import {
   readNativeChatDraftCache,
   writeNativeChatDraftCache
@@ -289,6 +290,9 @@ export function BotGroupChat({
               isVisible={isVisible}
             >
               <NativeChatTranscriptColumn ref={follow.contentRef} className="space-y-6 py-6">
+                <div className="flex justify-end">
+                  <ChatDisplayToggleBar />
+                </div>
                 {data?.hasEarlier ? (
                   <Button variant="ghost" size="sm" onClick={loadEarlier}>
                     {t('bots.groups.loadEarlierMessages', 'Load earlier messages')}

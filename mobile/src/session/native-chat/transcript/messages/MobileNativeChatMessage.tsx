@@ -43,6 +43,8 @@ import type { NativeChatTurnStatus } from '../../../../../../src/shared/native-c
 import { styles } from './mobile-native-chat-message-styles'
 import { MobileNativeChatAgentMessageCard } from '../agent-messages/MobileNativeChatAgentMessageCard'
 import { mobileAutomationRow } from '../MobileAutomationSavedRow'
+import { useMobileChatDisplayPrefs } from '../../chat-display-prefs'
+import { extractVisibleRunReasonings, MobileHiddenRunReasonings } from './MobileHiddenRunReasonings'
 import { MobileNativeChatVisualContext } from '../../visual/mobile-native-chat-visual-context'
 import { useMobileNativeChatFullMessage } from '../message-content/MobileNativeChatFullContent'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
@@ -157,7 +159,9 @@ function MobileNativeChatMessageImpl({
           Chat.isTextBlock(block) && block.presentation === PULL_REQUEST_EVENT_PRESENTATION
       )
     : undefined
-  const showToolRun = tools.length > 0
+  const displayPrefs = useMobileChatDisplayPrefs()
+  const showToolRun = displayPrefs.showToolDetails && tools.length > 0
+  const runReasonings = extractVisibleRunReasonings(workRun, displayPrefs.showToolDetails, displayPrefs.showReasoning)
   const askPending = structuredActivityUi
     ? selectActiveToolCall(unansweredAsks, { activeTurnIsWorking }) !== null
     : unansweredAsks.length > 0
@@ -238,24 +242,18 @@ function MobileNativeChatMessageImpl({
   }
   if (isReasoning && !workRun) {
     const markdown = deriveNativeChatRowContent(message.blocks).markdown
-    const draws = markdown.trim().length > 0 && !reasoningIsLive
+    const draws = displayPrefs.showReasoning && markdown.trim().length > 0 && !reasoningIsLive
     return withStatus(
       draws && (
         <View style={styles.row} testID={mobileNativeChatRowId(rowId)}>
-          <MobileNativeChatReasoningRow
-            message={message}
-            markdown={markdown}
-            fontScale={fontScale}
-            live={activeTurnIsWorking === true}
-            expanded={reasoningExpanded}
-            onToggle={onToggleReasoning}
-            onLongPress={onLongPress}
-          />
+          <MobileNativeChatReasoningRow message={message} markdown={markdown} fontScale={fontScale} live={activeTurnIsWorking === true} expanded={reasoningExpanded} onToggle={onToggleReasoning} onLongPress={onLongPress} />
           {showFull}
         </View>
       )
     )
   }
+  const visibleTasks = displayPrefs.showToolDetails && !isReasoning ? backgroundTasks : []
+  if (!isUser && !isSystem && !agentFrom && !pullRequestEvent && !tookOver && drawnProse.length === 0 && !askRow && !showToolRun && runReasonings.length === 0 && visibleTasks.length === 0) { return withStatus(null) }
   const isChatTurn = message.role === 'user' || message.role === 'assistant'
   // Paced prose calls this from its own renders too, so the key must not depend on earlier calls.
   const proseRow = (block: Chat.NativeChatBlock, key: number, text: string, revealing = false) => {
@@ -361,13 +359,8 @@ function MobileNativeChatMessageImpl({
               {isUser ? null : showFull}
             </>
           )}
-          {(isReasoning ? [] : backgroundTasks).map((task) => (
-            <MobileNativeChatBackgroundTaskRun
-              key={task.taskId}
-              block={task}
-              fontScale={fontScale}
-            />
-          ))}
+          {visibleTasks.map((task) => (<MobileNativeChatBackgroundTaskRun key={task.taskId} block={task} fontScale={fontScale} />))}
+          <MobileHiddenRunReasonings items={runReasonings} fontScale={fontScale} live={activeTurnIsWorking === true} onToggle={onToggleReasoning} onLongPress={onLongPress} />
           {askRow}
           {showToolRun ? (
             <ToolRun

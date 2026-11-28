@@ -9,7 +9,20 @@ import type {
 } from '../../../../src/shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type { RuntimeMobileSessionTabsResult } from '../../../../src/shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { MirroredEvidenceReceipt } from '../../../../src/shared/agent-status/contracts/agent-status-observation'
+import {
+  isAnyBotGroupMemberSession,
+  REMOTE_BOT_GROUP_MEMBER_SESSION_PREFIX
+} from '../../../../src/shared/bots/bot-group'
 import type { MobileNativeChatIdentity } from '../native-chat/conversation/mobile-native-chat-eligibility'
+
+export function isTeamGroupMemberTab(tab: { type: string; id: string; sessionId?: string }): boolean {
+  return (
+    tab.type === 'agent-session' &&
+    (isAnyBotGroupMemberSession(tab.sessionId) ||
+      tab.id.includes('bot-group-member-') ||
+      tab.id.includes(REMOTE_BOT_GROUP_MEMBER_SESSION_PREFIX))
+  )
+}
 
 export type MobileBrowserTab = Pick<
   RuntimeMobileSessionBrowserTab,

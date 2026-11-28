@@ -106,7 +106,10 @@ export function selectBotRowLine<R>(
       continue
     }
     const paneKey = read.paneKey(row)
-    if (paneKey.includes(REMOTE_BOT_GROUP_MEMBER_SESSION_PREFIX)) {
+    if (
+      paneKey.includes('bot-group-member-') ||
+      paneKey.includes(REMOTE_BOT_GROUP_MEMBER_SESSION_PREFIX)
+    ) {
       continue
     }
     const link = linkByPaneKey.get(paneKey)

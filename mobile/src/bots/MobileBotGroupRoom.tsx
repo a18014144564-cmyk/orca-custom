@@ -340,6 +340,7 @@ export function MobileBotGroupRoom({
         title={group?.name}
         actions={botGroupMenuActions({
           t,
+          includeDisplayToggles: true,
           newThread: {
             renderIcon: () => (
               <MobileBotFaceStack faces={faces} slot={20} ringColor={colors.sheetSurface} />

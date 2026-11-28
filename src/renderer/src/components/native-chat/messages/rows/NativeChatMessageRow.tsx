@@ -40,6 +40,7 @@ import {
   NativeChatGalleryMessageContext,
   nativeChatGalleryMessageId
 } from '../../media/images/gallery/native-chat-image-gallery-context'
+import { useDesktopChatDisplayPrefs } from '../../chat-display-prefs'
 
 /** Unconfirmed sending status or a failed-delivery notice with an optional dismissal. */
 export type NativeChatDeliveryNotice =
@@ -124,6 +125,7 @@ export const MessageRow = memo(function MessageRow(props: MessageRowProps): Reac
 
 function MessageRowContent(props: MessageRowProps): React.JSX.Element | null {
   const t = useTranslate()
+  const displayPrefs = useDesktopChatDisplayPrefs()
   const {
     message,
     agentName,
@@ -360,6 +362,9 @@ function MessageRowContent(props: MessageRowProps): React.JSX.Element | null {
   }
 
   if (isReasoning && run === undefined) {
+    if (!displayPrefs.showReasoning) {
+      return null
+    }
     return (
       <div ref={rowRef}>
         <NativeChatReasoningRow
@@ -371,8 +376,25 @@ function MessageRowContent(props: MessageRowProps): React.JSX.Element | null {
     )
   }
 
+  const runReasonings =
+    run !== undefined && !displayPrefs.showToolDetails && displayPrefs.showReasoning && props.workRun
+      ? props.workRun
+          .filter((member) => member.role === 'reasoning')
+          .map((member) => ({ member, md: deriveNativeChatRowContent(member.blocks).markdown }))
+          .filter((entry) => entry.md.trim().length > 0)
+      : []
+
   return (
     <NativeChatWorkRunStreamedContext.Provider value={streamedMembers}>
+      {runReasonings.map(({ member, md }) => (
+        <div key={member.id}>
+          <NativeChatReasoningRow
+            message={member}
+            turnIsWorking={activeTurnIsWorking}
+            markdown={md}
+          />
+        </div>
+      ))}
       <NativeChatAssistantMessageRow
         props={props}
         content={content}
